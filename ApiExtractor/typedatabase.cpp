@@ -30,6 +30,7 @@
 #include "reporthandler.h"
 // #include <tr1/tuple>
 #include <algorithm>
+#include <QtAlgorithms>
 
 // package -> api-version
 typedef QMap<QString, QByteArray> ApiVersionMap;
@@ -167,8 +168,10 @@ SingleTypeEntryHash TypeDatabase::entries() const
 QList<const PrimitiveTypeEntry*> TypeDatabase::primitiveTypes() const
 {
     TypeEntryHash entries = allEntries();
+	QList<QString> sorted_keys = entries.keys();
+	qSort(sorted_keys);
     QList<const PrimitiveTypeEntry*> returned;
-    foreach(QString key, entries.keys()) {
+    foreach(QString key, sorted_keys) {
         foreach(const TypeEntry* typeEntry, entries[key]) {
             if (typeEntry->isPrimitive())
                 returned.append((PrimitiveTypeEntry*) typeEntry);
@@ -180,8 +183,10 @@ QList<const PrimitiveTypeEntry*> TypeDatabase::primitiveTypes() const
 QList<const ContainerTypeEntry*> TypeDatabase::containerTypes() const
 {
     TypeEntryHash entries = allEntries();
+	QList<QString> sorted_keys = entries.keys();
+	qSort(sorted_keys);
     QList<const ContainerTypeEntry*> returned;
-    foreach(QString key, entries.keys()) {
+    foreach(QString key, sorted_keys) {
         foreach(const TypeEntry* typeEntry, entries[key]) {
             if (typeEntry->isContainer())
                 returned.append((ContainerTypeEntry*) typeEntry);

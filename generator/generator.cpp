@@ -107,7 +107,8 @@ void Generator::addInstantiatedContainers(const AbstractMetaType* type)
     QString typeName = getSimplifiedContainerTypeName(type);
     if (!m_d->instantiatedContainersNames.contains(typeName)) {
         m_d->instantiatedContainersNames.append(typeName);
-        m_d->instantiatedContainers.append(type);
+		qSort(m_d->instantiatedContainersNames);
+        m_d->instantiatedContainers.insert(m_d->instantiatedContainersNames.indexOf(typeName), type);
     }
 }
 
