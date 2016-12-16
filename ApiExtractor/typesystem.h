@@ -1,25 +1,30 @@
-/*
- * This file is part of the API Extractor project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #ifndef TYPESYSTEM_H
 #define TYPESYSTEM_H
@@ -38,7 +43,9 @@
 class Indentor;
 
 class AbstractMetaType;
+QT_BEGIN_NAMESPACE
 class QTextStream;
+QT_END_NAMESPACE
 
 class EnumTypeEntry;
 class FlagsTypeEntry;
@@ -843,7 +850,7 @@ public:
         QString pkg = targetLangPackage();
         if (pkg.isEmpty())
             return targetLangName();
-        return pkg + '.' + targetLangName();
+        return pkg + QLatin1Char('.') + targetLangName();
     }
 
     virtual InterfaceTypeEntry *designatedInterface() const
@@ -955,13 +962,13 @@ public:
     /// TODO-CONVERTER: mark as deprecated
     bool hasNativeConversionRule() const
     {
-        return m_conversionRule.startsWith(NATIVE_CONVERSION_RULE_FLAG);
+        return m_conversionRule.startsWith(QLatin1String(NATIVE_CONVERSION_RULE_FLAG));
     }
 
     /// TODO-CONVERTER: mark as deprecated
     bool hasTargetConversionRule() const
     {
-        return m_conversionRule.startsWith(TARGET_CONVERSION_RULE_FLAG);
+        return m_conversionRule.startsWith(QLatin1String(TARGET_CONVERSION_RULE_FLAG));
     }
 
     bool isCppPrimitive() const;
@@ -1001,13 +1008,13 @@ public:
 class VoidTypeEntry : public TypeEntry
 {
 public:
-    VoidTypeEntry() : TypeEntry("void", VoidType, 0) { }
+    VoidTypeEntry() : TypeEntry(QLatin1String("void"), VoidType, 0) { }
 };
 
 class VarargsTypeEntry : public TypeEntry
 {
 public:
-    VarargsTypeEntry() : TypeEntry("...", VarargsType, 0) { }
+    VarargsTypeEntry() : TypeEntry(QLatin1String("..."), VarargsType, 0) { }
 };
 
 class TemplateArgumentEntry : public TypeEntry
@@ -1035,7 +1042,7 @@ class ArrayTypeEntry : public TypeEntry
 {
 public:
     ArrayTypeEntry(const TypeEntry *nested_type, double vr)
-            : TypeEntry("Array", ArrayType, vr), m_nestedType(nested_type)
+            : TypeEntry(QLatin1String("Array"), ArrayType, vr), m_nestedType(nested_type)
     {
         Q_ASSERT(m_nestedType);
     }
@@ -1051,14 +1058,14 @@ public:
 
     QString targetLangName() const
     {
-        return m_nestedType->targetLangName() + "[]";
+        return m_nestedType->targetLangName() + QLatin1String("[]");
     }
     QString targetLangApiName() const
     {
         if (m_nestedType->isPrimitive())
-            return m_nestedType->targetLangApiName() + "Array";
+            return m_nestedType->targetLangApiName() + QLatin1String("Array");
         else
-            return "jobjectArray";
+            return QLatin1String("jobjectArray");
     }
 
 private:
@@ -1181,11 +1188,13 @@ public:
     EnumTypeEntry(const QString &nspace, const QString &enumName, double vr)
             : TypeEntry(nspace.isEmpty() ? enumName : nspace + QLatin1String("::") + enumName,
                         EnumType, vr),
+            m_qualifier(nspace),
+            m_targetLangName(enumName),
             m_flags(0),
-            m_extensible(false)
+            m_extensible(false),
+            m_forceInteger(false),
+            m_anonymous(false)
     {
-        m_qualifier = nspace;
-        m_targetLangName = enumName;
     }
 
     QString targetLangPackage() const
@@ -1209,9 +1218,9 @@ public:
         QString qualifier = targetLangQualifier();
 
         if (!pkg.isEmpty())
-            qualifiedName += pkg + '.';
+            qualifiedName += pkg + QLatin1Char('.');
         if (!qualifier.isEmpty())
-            qualifiedName += qualifier + '.';
+            qualifiedName += qualifier + QLatin1Char('.');
         qualifiedName += targetLangName();
 
         return qualifiedName;
@@ -1420,14 +1429,13 @@ public:
     };
 
     ComplexTypeEntry(const QString &name, Type t, double vr)
-            : TypeEntry(QString(name).replace(".*::", ""), t, vr),
+            : TypeEntry(QString(name).replace(QLatin1String(".*::"), QString()), t, vr),
             m_qualifiedCppName(name),
             m_qobject(false),
             m_polymorphicBase(false),
             m_genericClass(false),
             m_typeFlags(0),
             m_copyableFlag(Unknown),
-            m_hashFunction(""),
             m_baseContainerType(0)
     {
     }
@@ -1709,18 +1717,18 @@ public:
     {
         static QHash<QString, Type> m_stringToContainerType;
         if (m_stringToContainerType.isEmpty()) {
-            m_stringToContainerType["list"] = ListContainer;
-            m_stringToContainerType["string-list"] = StringListContainer;
-            m_stringToContainerType["linked-list"] = LinkedListContainer;
-            m_stringToContainerType["vector"] = VectorContainer;
-            m_stringToContainerType["stack"] = StackContainer;
-            m_stringToContainerType["queue"] = QueueContainer;
-            m_stringToContainerType["set"] = SetContainer;
-            m_stringToContainerType["map"] = MapContainer;
-            m_stringToContainerType["multi-map"] = MultiMapContainer;
-            m_stringToContainerType["hash"] = HashContainer;
-            m_stringToContainerType["multi-hash"] = MultiHashContainer;
-            m_stringToContainerType["pair"] = PairContainer;
+            m_stringToContainerType.insert(QLatin1String("list"), ListContainer);
+            m_stringToContainerType.insert(QLatin1String("string-list"), StringListContainer);
+            m_stringToContainerType.insert(QLatin1String("linked-list"), LinkedListContainer);
+            m_stringToContainerType.insert(QLatin1String("vector"), VectorContainer);
+            m_stringToContainerType.insert(QLatin1String("stack"), StackContainer);
+            m_stringToContainerType.insert(QLatin1String("queue"), QueueContainer);
+            m_stringToContainerType.insert(QLatin1String("set"), SetContainer);
+            m_stringToContainerType.insert(QLatin1String("map"), MapContainer);
+            m_stringToContainerType.insert(QLatin1String("multi-map"), MultiMapContainer);
+            m_stringToContainerType.insert(QLatin1String("hash"), HashContainer);
+            m_stringToContainerType.insert(QLatin1String("multi-hash"), MultiHashContainer);
+            m_stringToContainerType.insert(QLatin1String("pair"), PairContainer);
         }
         return m_stringToContainerType.value(typeName, NoContainer);
     }
@@ -1822,7 +1830,7 @@ public:
 
     static QString interfaceName(const QString &name)
     {
-        return name + "Interface";
+        return name + QLatin1String("Interface");
     }
 
     ObjectTypeEntry *origin() const
@@ -1840,7 +1848,8 @@ public:
     }
     virtual QString qualifiedCppName() const
     {
-        return ComplexTypeEntry::qualifiedCppName().left(ComplexTypeEntry::qualifiedCppName().length() - interfaceName("").length());
+        const int len = ComplexTypeEntry::qualifiedCppName().length() - interfaceName(QString()).length();
+        return ComplexTypeEntry::qualifiedCppName().left(len);
     }
 
 private:

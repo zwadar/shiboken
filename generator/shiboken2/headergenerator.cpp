@@ -1,25 +1,30 @@
-/*
- * This file is part of the Shiboken Python Bindings Generator project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "headergenerator.h"
 #include <typedatabase.h>
@@ -34,7 +39,9 @@
 
 QString HeaderGenerator::fileNameForClass(const AbstractMetaClass* metaClass) const
 {
-    return metaClass->qualifiedCppName().toLower().replace("::", "_") + QLatin1String("_wrapper.h");
+    QString result = metaClass->qualifiedCppName().toLower();
+    result.replace(QLatin1String("::"), QLatin1String("_"));
+    return result + QLatin1String("_wrapper.h");
 }
 
 void HeaderGenerator::writeCopyCtor(QTextStream& s, const AbstractMetaClass* metaClass) const
@@ -49,7 +56,7 @@ void HeaderGenerator::writeProtectedFieldAccessors(QTextStream& s, const Abstrac
 {
     AbstractMetaType *metaType = field->type();
     QString fieldType = metaType->cppSignature();
-    QString fieldName = field->enclosingClass()->qualifiedCppName() + "::" + field->name();
+    QString fieldName = field->enclosingClass()->qualifiedCppName() + QLatin1String("::") + field->name();
 
     // Force use of pointer to return internal variable memory
     bool useReference = (!metaType->isConstant() &&
@@ -72,7 +79,8 @@ void HeaderGenerator::writeProtectedFieldAccessors(QTextStream& s, const Abstrac
 
 void HeaderGenerator::generateClass(QTextStream& s, const AbstractMetaClass* metaClass)
 {
-    ReportHandler::debugSparse("Generating header for " + metaClass->fullName());
+    if (ReportHandler::isDebug(ReportHandler::SparseDebug))
+        qCDebug(lcShiboken) << "Generating header for " << metaClass->fullName();
     m_inheritedOverloads.clear();
     Indentation indent(INDENT);
 
@@ -80,7 +88,7 @@ void HeaderGenerator::generateClass(QTextStream& s, const AbstractMetaClass* met
     s << licenseComment();
 
     QString wrapperName = HeaderGenerator::wrapperName(metaClass);
-    QString headerGuard = wrapperName.replace("::", "_").toUpper();
+    QString headerGuard = wrapperName.replace(QLatin1String("::"), QLatin1String("_")).toUpper();
 
     // Header
     s << "#ifndef SBK_" << headerGuard << "_H" << endl;
@@ -164,7 +172,8 @@ void HeaderGenerator::writeFunction(QTextStream& s, const AbstractMetaFunction* 
 
     if (avoidProtectedHack() && func->isProtected() && !func->isConstructor() && !func->isOperatorOverload()) {
         s << INDENT << "inline " << (func->isStatic() ? "static " : "");
-        s << functionSignature(func, "", "_protected", Generator::EnumAsInts|Generator::OriginalTypeDescription) << " { ";
+        s << functionSignature(func, QString(), QLatin1String("_protected"), Generator::EnumAsInts|Generator::OriginalTypeDescription)
+            << " { ";
         s << (func->type() ? "return " : "");
         if (!func->isAbstract())
             s << func->ownerClass()->qualifiedCppName() << "::";
@@ -178,10 +187,10 @@ void HeaderGenerator::writeFunction(QTextStream& s, const AbstractMetaFunction* 
             else if (arg->type()->isEnum())
                 enumTypeEntry = arg->type()->typeEntry();
             if (enumTypeEntry)
-                argName = QString("%1(%2)").arg(arg->type()->cppSignature()).arg(argName);
+                argName = QString::fromLatin1("%1(%2)").arg(arg->type()->cppSignature(), argName);
             args << argName;
         }
-        s << args.join(", ") << ')';
+        s << args.join(QLatin1String(", ")) << ')';
         s << "; }" << endl;
     }
 
@@ -203,7 +212,7 @@ void HeaderGenerator::writeFunction(QTextStream& s, const AbstractMetaFunction* 
         else if (!func->hasSignatureModifications())
             virtualOption = Generator::NoOption;
 
-        s << functionSignature(func, "", "", virtualOption) << ';' << endl;
+        s << functionSignature(func, QString(), QString(), virtualOption) << ';' << endl;
 
         // Check if this method hide other methods in base classes
         foreach (const AbstractMetaFunction* f, func->ownerClass()->functions()) {
@@ -266,7 +275,7 @@ void HeaderGenerator::writeTypeIndexDefine(QTextStream& s, const AbstractMetaCla
     }
 }
 
-void HeaderGenerator::finishGeneration()
+bool HeaderGenerator::finishGeneration()
 {
     // Generate the main header for this module.
     // This header should be included by binding modules
@@ -291,7 +300,7 @@ void HeaderGenerator::finishGeneration()
         writeTypeIndexDefineLine(macrosStream, metaEnum->typeEntry());
     macrosStream << "#define ";
     macrosStream.setFieldWidth(60);
-    macrosStream << "SBK_"+moduleName()+"_IDX_COUNT";
+    macrosStream << QLatin1String("SBK_") + moduleName() + QLatin1String("_IDX_COUNT");
     macrosStream.setFieldWidth(0);
     macrosStream << ' ' << getMaxTypeIndex() << endl << endl;
     macrosStream << "// This variable stores all Python types exported by this module." << endl;
@@ -331,7 +340,7 @@ void HeaderGenerator::finishGeneration()
     // Because on win32 the compiler will not accept a zero length array.
     if (pCount == 0)
         pCount++;
-    _writeTypeIndexDefineLine(macrosStream, QString("SBK_%1_CONVERTERS_IDX_COUNT").arg(moduleName()), pCount);
+    _writeTypeIndexDefineLine(macrosStream, QStringLiteral("SBK_%1_CONVERTERS_IDX_COUNT").arg(moduleName()), pCount);
     macrosStream << endl;
     // TODO-CONVERTER ------------------------------------------------------------------------------
 
@@ -369,7 +378,7 @@ void HeaderGenerator::finishGeneration()
                                  + QDir::separator() + subDirectoryForPackage(packageName())
                                  + QDir::separator() + getModuleHeaderFileName());
 
-    QString includeShield("SBK_" + moduleName().toUpper() + "_PYTHON_H");
+    QString includeShield(QLatin1String("SBK_") + moduleName().toUpper() + QLatin1String("_PYTHON_H"));
 
     FileOut file(moduleHeaderFileName);
     QTextStream& s = file.stream;
@@ -433,6 +442,8 @@ void HeaderGenerator::finishGeneration()
     s << "} // namespace Shiboken" << endl << endl;
 
     s << "#endif // " << includeShield << endl << endl;
+
+    return file.done() != FileOut::Failure;
 }
 
 void HeaderGenerator::writeProtectedEnumSurrogate(QTextStream& s, const AbstractMetaEnum* cppEnum)
@@ -449,7 +460,7 @@ void HeaderGenerator::writeSbkTypeFunction(QTextStream& s, const AbstractMetaEnu
     } else {
         enumName = cppEnum->name();
         if (cppEnum->enclosingClass())
-            enumName = cppEnum->enclosingClass()->qualifiedCppName() + "::" + enumName;
+            enumName = cppEnum->enclosingClass()->qualifiedCppName() + QLatin1String("::") + enumName;
     }
 
     s << "template<> inline PyTypeObject* SbkType< ::" << enumName << " >() ";
@@ -472,7 +483,7 @@ void HeaderGenerator::writeInheritedOverloads(QTextStream& s)
 {
     foreach (const AbstractMetaFunction* func, m_inheritedOverloads) {
         s << INDENT << "inline ";
-        s << functionSignature(func, "", "", Generator::EnumAsInts|Generator::OriginalTypeDescription) << " { ";
+        s << functionSignature(func, QString(), QString(), Generator::EnumAsInts|Generator::OriginalTypeDescription) << " { ";
         s << (func->type() ? "return " : "");
         s << func->ownerClass()->qualifiedCppName() << "::" << func->originalName() << '(';
         QStringList args;
@@ -484,10 +495,10 @@ void HeaderGenerator::writeInheritedOverloads(QTextStream& s)
             else if (arg->type()->isEnum())
                 enumTypeEntry = arg->type()->typeEntry();
             if (enumTypeEntry)
-                argName = QString("%1(%2)").arg(arg->type()->cppSignature()).arg(argName);
+                argName = arg->type()->cppSignature() + QLatin1Char('(') + argName + QLatin1Char(')');
             args << argName;
         }
-        s << args.join(", ") << ')';
+        s << args.join(QLatin1String(", ")) << ')';
         s << "; }" << endl;
     }
 }

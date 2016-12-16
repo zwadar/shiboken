@@ -1,25 +1,30 @@
-/*
- * This file is part of the API Extractor project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "typedatabase.h"
 #include "typesystem.h"
@@ -56,17 +61,19 @@ TypeDatabase* TypeDatabase::instance(bool newInstance)
 
 QString TypeDatabase::normalizedSignature(const char* signature)
 {
-    QString normalized = QMetaObject::normalizedSignature(signature);
+    QString normalized = QLatin1String(QMetaObject::normalizedSignature(signature));
 
-    if (!instance() || !QString(signature).contains("unsigned"))
+    if (!instance() || !QByteArray(signature).contains("unsigned"))
         return normalized;
 
     QStringList types;
-    types << "char" << "short" << "int" << "long";
+    types << QLatin1String("char") << QLatin1String("short")
+        << QLatin1String("int") << QLatin1String("long");
     foreach (const QString& type, types) {
-        if (instance()->findType(QString("u%1").arg(type)))
+        if (instance()->findType(QLatin1Char('u') + type))
             continue;
-        normalized.replace(QRegExp(QString("\\bu%1\\b").arg(type)), QString("unsigned %1").arg(type));
+        const QString pattern = QLatin1String("\\bu") + type + QLatin1String("\\b");
+        normalized.replace(QRegExp(pattern), QLatin1String("unsigned ") + type);
     }
 
     return normalized;
@@ -86,11 +93,11 @@ void TypeDatabase::addRequiredTargetImport(const QString& moduleName)
 void TypeDatabase::addTypesystemPath(const QString& typesystem_paths)
 {
     #if defined(Q_OS_WIN32)
-    char* path_splitter = const_cast<char*>(";");
+    const char path_splitter = ';';
     #else
-    char* path_splitter = const_cast<char*>(":");
+    const char path_splitter = ':';
     #endif
-    m_typesystemPaths += typesystem_paths.split(path_splitter);
+    m_typesystemPaths += typesystem_paths.split(QLatin1Char(path_splitter));
 }
 
 IncludeList TypeDatabase::extraIncludes(const QString& className) const
@@ -106,7 +113,7 @@ ContainerTypeEntry* TypeDatabase::findContainerType(const QString &name) const
 {
     QString template_name = name;
 
-    int pos = name.indexOf('<');
+    int pos = name.indexOf(QLatin1Char('<'));
     if (pos > 0)
         template_name = name.left(pos);
 
@@ -127,8 +134,8 @@ FunctionTypeEntry* TypeDatabase::findFunctionType(const QString& name) const
 
 PrimitiveTypeEntry* TypeDatabase::findTargetLangPrimitiveType(const QString& targetLangName) const
 {
-    foreach (QList<TypeEntry*> entries, m_entries.values()) {
-        foreach (TypeEntry* e, entries) {
+    for (TypeEntryHash::const_iterator it = m_entries.cbegin(), end = m_entries.cend(); it != end; ++it) {
+        foreach (TypeEntry* e, it.value()) {
             if (e && e->isPrimitive()) {
                 PrimitiveTypeEntry *pe = static_cast<PrimitiveTypeEntry*>(e);
                 if (pe->targetLangName() == targetLangName && pe->preferredConversion())
@@ -157,10 +164,8 @@ SingleTypeEntryHash TypeDatabase::entries() const
     TypeEntryHash entries = allEntries();
 
     SingleTypeEntryHash returned;
-    QList<QString> keys = entries.keys();
-
-    foreach (QString key, keys)
-        returned[key] = findType(key);
+    for (TypeEntryHash::const_iterator it = entries.cbegin(), end = entries.cend(); it != end; ++it)
+        returned.insert(it.key(), findType(it.key()));
 
     return returned;
 }
@@ -211,10 +216,12 @@ bool TypeDatabase::isClassRejected(const QString& className) const
     if (!m_rebuildClasses.isEmpty())
         return !m_rebuildClasses.contains(className);
 
-    foreach (const TypeRejection& r, m_rejections)
-    if (r.class_name == className && r.function_name == "*" && r.field_name == "*" && r.enum_name == "*")
-        return true;
-
+    foreach (const TypeRejection& r, m_rejections) {
+        if (r.class_name == className && r.function_name == QLatin1String("*")
+            && r.field_name == QLatin1String("*") && r.enum_name == QLatin1String("*")) {
+            return true;
+        }
+    }
     return false;
 }
 
@@ -222,7 +229,7 @@ bool TypeDatabase::isEnumRejected(const QString& className, const QString& enumN
 {
     foreach (const TypeRejection& r, m_rejections) {
         if (r.enum_name == enumName
-            && (r.class_name == className || r.class_name == "*")) {
+            && (r.class_name == className || r.class_name == QLatin1String("*"))) {
             return true;
         }
     }
@@ -234,7 +241,7 @@ bool TypeDatabase::isFunctionRejected(const QString& className, const QString& f
 {
     foreach (const TypeRejection& r, m_rejections)
     if (r.function_name == functionName &&
-        (r.class_name == className || r.class_name == "*"))
+        (r.class_name == className || r.class_name == QLatin1String("*")))
         return true;
     return false;
 }
@@ -244,7 +251,7 @@ bool TypeDatabase::isFieldRejected(const QString& className, const QString& fiel
 {
     foreach (const TypeRejection& r, m_rejections)
     if (r.field_name == fieldName &&
-        (r.class_name == className || r.class_name == "*"))
+        (r.class_name == className || r.class_name == QLatin1String("*")))
         return true;
     return false;
 }
@@ -256,9 +263,9 @@ FlagsTypeEntry* TypeDatabase::findFlagsType(const QString &name) const
         fte = (FlagsTypeEntry*) m_flagsEntries.value(name);
         if (!fte) {
             //last hope, search for flag without scope  inside of flags hash
-            foreach(QString key, m_flagsEntries.keys()) {
-                if (key.endsWith(name)) {
-                    fte = (FlagsTypeEntry*) m_flagsEntries.value(key);
+            for (SingleTypeEntryHash::const_iterator it = m_flagsEntries.cbegin(), end = m_flagsEntries.cend(); it != end; ++it) {
+                if (it.key().endsWith(name)) {
+                    fte = static_cast<FlagsTypeEntry *>(const_cast<TypeEntry *>(it.value()));
                     break;
                 }
             }
@@ -270,7 +277,7 @@ FlagsTypeEntry* TypeDatabase::findFlagsType(const QString &name) const
 AddedFunctionList TypeDatabase::findGlobalUserFunctions(const QString& name) const
 {
     AddedFunctionList addedFunctions;
-    foreach (AddedFunction func, m_globalUserFunctions) {
+    foreach (const AddedFunction &func, m_globalUserFunctions) {
         if (func.name() == name)
             addedFunctions.append(func);
     }
@@ -301,19 +308,20 @@ bool TypeDatabase::isSuppressedWarning(const QString& s) const
         return false;
 
     foreach (const QString &_warning, m_suppressedWarnings) {
-        QString warning(QString(_warning).replace("\\*", "&place_holder_for_asterisk;"));
+        QString warning = _warning;
+        warning.replace(QLatin1String("\\*"), QLatin1String("&place_holder_for_asterisk;"));
 
-        QStringList segs = warning.split("*", QString::SkipEmptyParts);
+        QStringList segs = warning.split(QLatin1Char('*'), QString::SkipEmptyParts);
         if (!segs.size())
             continue;
 
         int i = 0;
-        int pos = s.indexOf(QString(segs.at(i++)).replace("&place_holder_for_asterisk;", "*"));
+        int pos = s.indexOf(QString(segs.at(i++)).replace(QLatin1String("&place_holder_for_asterisk;"), QLatin1String("*")));
         //qDebug() << "s == " << s << ", warning == " << segs;
         while (pos != -1) {
             if (i == segs.size())
                 return true;
-            pos = s.indexOf(QString(segs.at(i++)).replace("&place_holder_for_asterisk;", "*"), pos);
+            pos = s.indexOf(QString(segs.at(i++)).replace(QLatin1String("&place_holder_for_asterisk;"), QLatin1String("*")), pos);
         }
     }
 
@@ -323,10 +331,10 @@ bool TypeDatabase::isSuppressedWarning(const QString& s) const
 QString TypeDatabase::modifiedTypesystemFilepath(const QString& tsFile) const
 {
     if (!QFile::exists(tsFile)) {
-        int idx = tsFile.lastIndexOf('/');
+        int idx = tsFile.lastIndexOf(QLatin1Char('/'));
         QString fileName = idx >= 0 ? tsFile.right(tsFile.length() - idx - 1) : tsFile;
         foreach (const QString &path, m_typesystemPaths) {
-            QString filepath(path + '/' + fileName);
+            QString filepath(path + QLatin1Char('/') + fileName);
             if (QFile::exists(filepath))
                 return filepath;
         }
@@ -342,7 +350,8 @@ bool TypeDatabase::parseFile(const QString &filename, bool generate)
 
     QFile file(filepath);
     if (!file.exists()) {
-        ReportHandler::warning("Can't find " + filename+", typesystem paths: "+m_typesystemPaths.join(", "));
+        qCWarning(lcShiboken).noquote().nospace()
+            << "Can't find " << filename << ", typesystem paths: " << m_typesystemPaths.join(QLatin1String(", "));
         return false;
     }
 
@@ -351,16 +360,17 @@ bool TypeDatabase::parseFile(const QString &filename, bool generate)
     m_parsedTypesystemFiles[filepath] = ok;
     int newCount = m_entries.size();
 
-    ReportHandler::debugSparse(QString::fromLatin1("Parsed: '%1', %2 new entries")
-    .arg(filename)
-    .arg(newCount - count));
+    if (ReportHandler::isDebug(ReportHandler::SparseDebug)) {
+          qCDebug(lcShiboken)
+              << QStringLiteral("Parsed: '%1', %2 new entries").arg(filename).arg(newCount - count);
+    }
     return ok;
 }
 
 bool TypeDatabase::parseFile(QIODevice* device, bool generate)
 {
     if (m_apiVersion) // backwards compatibility with deprecated API
-        setApiVersion("*", QByteArray::number(m_apiVersion));
+        setApiVersion(QLatin1String("*"), QByteArray::number(m_apiVersion));
 
     QXmlInputSource source(device);
     QXmlSimpleReader reader;

@@ -1,26 +1,31 @@
-/*
- * This file is part of the API Extractor project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- * Copyright (C) 2002-2005 Roberto Raggi <roberto@kdevelop.org>
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2002-2005 Roberto Raggi <roberto@kdevelop.org>
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 
 #include "lexer.h"
@@ -75,7 +80,7 @@ void LocationManager::extract_line(int offset, int *line, QString *filename) con
         Q_ASSERT(*cursor == '"');
         ++cursor;
 
-        *filename = buffer;
+        *filename = QLatin1String(buffer);
         *line = l;
         // printf("filename: %s line: %d\n", buffer, line);
     }
@@ -84,13 +89,15 @@ void LocationManager::extract_line(int offset, int *line, QString *filename) con
 void LocationManager::positionAt(std::size_t offset, int *line, int *column,
                                  QString *filename) const
 {
-    int ppline, ppcolumn;
+    int ppline = 0;
+    int ppcolumn = 0;
     line_table.positionAt(offset, &ppline, &ppcolumn);
 
-    int base_line;
+    int base_line = 0;
     extract_line((int) line_table[ppline-1], &base_line, filename);
 
-    int line2, column2;
+    int line2 = 0;
+    int column2 = 0;
     location_table.positionAt((int) line_table[ppline-1], &line2, &column2);
 
     location_table.positionAt(offset, line, column);
@@ -144,7 +151,8 @@ void Lexer::tokenize(const char *contents, std::size_t size)
 
 void Lexer::reportError(const QString& msg)
 {
-    int line, column;
+    int line = 0;
+    int column = 0;
     QString fileName;
 
     std::size_t tok = token_stream.cursor();
@@ -221,7 +229,7 @@ void Lexer::scan_preprocessor()
         ++cursor;
 
     if (*cursor != '\n')
-        reportError("expected newline");
+        reportError(QLatin1String("expected newline"));
 }
 
 void Lexer::scan_char_constant()
@@ -231,7 +239,7 @@ void Lexer::scan_char_constant()
     ++cursor;
     while (*cursor && *cursor != '\'') {
         if (*cursor == '\n')
-            reportError("did not expect newline");
+            reportError(QLatin1String("did not expect newline"));
 
         if (*cursor == '\\')
             ++cursor;
@@ -239,7 +247,7 @@ void Lexer::scan_char_constant()
     }
 
     if (*cursor != '\'')
-        reportError("expected \'");
+        reportError(QLatin1String("expected \'"));
 
     ++cursor;
 
@@ -256,7 +264,7 @@ void Lexer::scan_string_constant()
     ++cursor;
     while (*cursor && *cursor != '"') {
         if (*cursor == '\n')
-            reportError("did not expect newline");
+            reportError(QLatin1String("did not expect newline"));
 
         if (*cursor == '\\')
             ++cursor;
@@ -264,7 +272,7 @@ void Lexer::scan_string_constant()
     }
 
     if (*cursor != '"')
-        reportError("expected \"");
+        reportError(QLatin1String("expected \""));
 
     ++cursor;
 
@@ -684,7 +692,7 @@ void Lexer::scan_EOF()
 
 void Lexer::scan_invalid_input()
 {
-    QString errmsg("invalid input: %1");
+    QString errmsg(QLatin1String("invalid input: %1"));
     reportError(errmsg);
     ++cursor;
 }

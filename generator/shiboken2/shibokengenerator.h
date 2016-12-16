@@ -1,25 +1,30 @@
-/*
- * This file is part of the Shiboken Python Bindings Generator project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #ifndef SHIBOKENGENERATOR_H
 #define SHIBOKENGENERATOR_H
@@ -226,8 +231,8 @@ public:
      *   \param arg_count the number of function arguments
      */
     QString functionSignature(const AbstractMetaFunction* func,
-                              QString prepend = "",
-                              QString append = "",
+                              QString prepend = QString(),
+                              QString append = QString(),
                               Options options = NoOption,
                               int arg_count = -1) const;
 
@@ -378,7 +383,7 @@ public:
     QString cpythonSetattroFunctionName(const AbstractMetaClass* metaClass);
     QString cpythonGetterFunctionName(const AbstractMetaField* metaField);
     QString cpythonSetterFunctionName(const AbstractMetaField* metaField);
-    QString cpythonWrapperCPtr(const AbstractMetaClass* metaClass, QString argName = PYTHON_SELF_VAR);
+    QString cpythonWrapperCPtr(const AbstractMetaClass* metaClass, QString argName = QLatin1String(PYTHON_SELF_VAR));
     QString cpythonWrapperCPtr(const AbstractMetaType* metaType, QString argName);
     QString cpythonWrapperCPtr(const TypeEntry* type, QString argName);
 

@@ -1,25 +1,30 @@
-/*
- * This file is part of the API Extractor project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "doxygenparser.h"
 #include "abstractmetalang.h"
@@ -59,10 +64,10 @@ void DoxygenParser::fillDocumentation(AbstractMetaClass* metaClass)
     QString doxyFileSuffix;
     if (metaClass->enclosingClass()) {
         doxyFileSuffix += metaClass->enclosingClass()->name();
-        doxyFileSuffix += "_1_1"; // FIXME: Check why _1_1!!
+        doxyFileSuffix += QLatin1String("_1_1"); // FIXME: Check why _1_1!!
     }
     doxyFileSuffix += metaClass->name();
-    doxyFileSuffix += ".xml";
+    doxyFileSuffix += QLatin1String(".xml");
 
     const char* prefixes[] = { "class", "struct", "namespace" };
     const int numPrefixes = sizeof(prefixes) / sizeof(const char*);
@@ -70,28 +75,29 @@ void DoxygenParser::fillDocumentation(AbstractMetaClass* metaClass)
 
     QString doxyFilePath;
     for (int i = 0; i < numPrefixes; ++i) {
-        doxyFilePath = documentationDataDirectory() + "/" + prefixes[i] + doxyFileSuffix;
+        doxyFilePath = documentationDataDirectory() + QLatin1Char('/')
+                       + QLatin1String(prefixes[i]) + doxyFileSuffix;
         if (QFile::exists(doxyFilePath))
             break;
         doxyFilePath.clear();
     }
 
     if (doxyFilePath.isEmpty()) {
-        ReportHandler::warning("Can't find doxygen file for class "
-                               + metaClass->name() + ", tried: "
-                               + documentationDataDirectory() + "/{struct|class|namespace}"
-                               + doxyFileSuffix);
+        qCWarning(lcShiboken).noquote().nospace()
+            << "Can't find doxygen file for class " << metaClass->name() << ", tried: "
+            << QDir::toNativeSeparators(documentationDataDirectory())
+            <<  "/{struct|class|namespace}"<< doxyFileSuffix;
         return;
     }
     QXmlQuery xquery;
     xquery.setFocus(QUrl(doxyFilePath));
 
     // Get class documentation
-    QString classDoc = getDocumentation(xquery, "/doxygen/compounddef/detaileddescription",
+    QString classDoc = getDocumentation(xquery, QLatin1String("/doxygen/compounddef/detaileddescription"),
                                         metaClass->typeEntry()->docModifications());
     if (classDoc.isEmpty()) {
-        ReportHandler::warning("Can't find documentation for class \""
-                               + metaClass->name() + "\".");
+        qCWarning(lcShiboken).noquote().nospace()
+            << "Can't find documentation for class \"" << metaClass->name() << "\".";
     }
     metaClass->setDocumentation(classDoc);
 
@@ -101,41 +107,44 @@ void DoxygenParser::fillDocumentation(AbstractMetaClass* metaClass)
         if (!func || func->isPrivate())
             continue;
 
-        QString query = "/doxygen/compounddef/sectiondef";
+        QString query = QLatin1String("/doxygen/compounddef/sectiondef");
         // properties
         if (func->isPropertyReader() || func->isPropertyWriter()
             || func->isPropertyResetter()) {
-            query += "[@kind=\"property\"]/memberdef/name[text()=\""
-                     + func->propertySpec()->name() + "\"]";
+            query += QLatin1String("[@kind=\"property\"]/memberdef/name[text()=\"")
+                     + func->propertySpec()->name() + QLatin1String("\"]");
             isProperty = true;
         } else { // normal methods
             QString kind = getSectionKindAttr(func);
-            query += "[@kind=\"" + kind + "-func\"]/memberdef/name[text()=\""
-                     + func->originalName() + "\"]";
+            query += QLatin1String("[@kind=\"") + kind
+                     + QLatin1String("-func\"]/memberdef/name[text()=\"")
+                     + func->originalName() + QLatin1String("\"]");
 
             if (func->arguments().isEmpty()) {
-                QString args = func->isConstant() ? "() const " : "()";
-                query += "/../argsstring[text()=\"" + args + "\"]";
+                QString args = func->isConstant() ? QLatin1String("() const ") : QLatin1String("()");
+                query += QLatin1String("/../argsstring[text()=\"") + args + QLatin1String("\"]");
             } else {
                 int i = 1;
                 foreach (AbstractMetaArgument* arg, func->arguments()) {
                     QString type;
                     if (!arg->type()->isPrimitive()) {
-                        query += "/../param[" + QString::number(i) + "]/type/ref[text()=\""
-                                 + arg->type()->name() + "\"]/../..";
+                        query += QLatin1String("/../param[") + QString::number(i)
+                                 + QLatin1String("]/type/ref[text()=\"")
+                                 + arg->type()->name() + QLatin1String("\"]/../..");
                     } else {
-                        query += "/../param[" + QString::number(i) + "]/type[text()=\""
-                                 + arg->type()->name() + "\"]/..";
+                        query += QLatin1String("/../param[") + QString::number(i)
+                                 + QLatin1String("]/type[text()=\"")
+                                 + arg->type()->name() + QLatin1String("\"]/..");
                     }
                     ++i;
                 }
             }
         }
         if (!isProperty) {
-            query += "/../detaileddescription";
+            query += QLatin1String("/../detaileddescription");
         } else {
-            query = "(" + query;
-            query += "/../detaileddescription)[1]";
+            query = QLatin1Char('(') + query;
+            query += QLatin1String("/../detaileddescription)[1]");
         }
         QString doc = getDocumentation(xquery, query, DocModificationList());
         func->setDocumentation(doc);
@@ -148,8 +157,8 @@ void DoxygenParser::fillDocumentation(AbstractMetaClass* metaClass)
         if (field->isPrivate())
             return;
 
-        QString query = "/doxygen/compounddef/sectiondef/memberdef/name[text()=\""
-                        + field->name() + "\"]/../detaileddescription";
+        QString query = QLatin1String("/doxygen/compounddef/sectiondef/memberdef/name[text()=\"")
+                        + field->name() + QLatin1String("\"]/../detaileddescription");
         QString doc = getDocumentation(xquery, query, DocModificationList());
         field->setDocumentation(doc);
     }
@@ -157,7 +166,8 @@ void DoxygenParser::fillDocumentation(AbstractMetaClass* metaClass)
     //Enums
     AbstractMetaEnumList enums = metaClass->enums();
     foreach (AbstractMetaEnum *meta_enum, enums) {
-        QString query = "/doxygen/compounddef/sectiondef/memberdef[@kind=\"enum\"]/name[text()=\"" + meta_enum->name() + "\"]/..";
+        QString query = QLatin1String("/doxygen/compounddef/sectiondef/memberdef[@kind=\"enum\"]/name[text()=\"")
+            + meta_enum->name() + QLatin1String("\"]/..");
         QString doc = getDocumentation(xquery, query, DocModificationList());
         meta_enum->setDocumentation(doc);
     }
@@ -166,12 +176,12 @@ void DoxygenParser::fillDocumentation(AbstractMetaClass* metaClass)
 
 Documentation DoxygenParser::retrieveModuleDocumentation(const QString& name){
 
-    QString sourceFile = documentationDataDirectory() + '/' + "indexpage.xml";
+    QString sourceFile = documentationDataDirectory() + QLatin1String("/indexpage.xml");
 
     if (!QFile::exists(sourceFile)) {
-        ReportHandler::warning("Can't find doxygen XML file for module "
-                               + name + ", tried: "
-                                                 + sourceFile);
+        qCWarning(lcShiboken).noquote().nospace()
+            << "Can't find doxygen XML file for module " << name << ", tried: "
+            << QDir::toNativeSeparators(sourceFile);
         return Documentation();
     }
 
@@ -179,7 +189,7 @@ Documentation DoxygenParser::retrieveModuleDocumentation(const QString& name){
     xquery.setFocus(QUrl(sourceFile));
 
     // Module documentation
-    QString query = "/doxygen/compounddef/detaileddescription";
+    QString query = QLatin1String("/doxygen/compounddef/detaileddescription");
     return Documentation(getDocumentation(xquery, query, DocModificationList()));
 }
 

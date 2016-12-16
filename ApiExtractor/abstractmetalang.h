@@ -1,25 +1,30 @@
-/*
- * This file is part of the API Extractor project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #ifndef ABSTRACTMETALANG_H
 #define ABSTRACTMETALANG_H
@@ -31,6 +36,7 @@
 #include <QtCore/QTextStream>
 #include <QSharedPointer>
 
+QT_FORWARD_DECLARE_CLASS(QDebug)
 
 class AbstractMeta;
 class AbstractMetaClass;
@@ -93,6 +99,7 @@ public:
 
 class AbstractMetaAttributes
 {
+    Q_GADGET
 public:
     AbstractMetaAttributes() : m_attributes(0), m_originalAttributes(0) {};
 
@@ -129,33 +136,35 @@ public:
 
         Final                       = FinalInTargetLang | FinalInCpp
     };
+    Q_DECLARE_FLAGS(Attributes, Attribute)
+    Q_FLAG(Attribute)
 
-    uint attributes() const
+    Attributes attributes() const
     {
         return m_attributes;
     }
 
-    void setAttributes(uint attributes)
+    void setAttributes(Attributes attributes)
     {
         m_attributes = attributes;
     }
 
-    uint originalAttributes() const
+    Attributes originalAttributes() const
     {
         return m_originalAttributes;
     }
 
-    void setOriginalAttributes(uint attributes)
+    void setOriginalAttributes(Attributes attributes)
     {
         m_originalAttributes = attributes;
     }
 
-    uint visibility() const
+    Attributes visibility() const
     {
         return m_attributes & Visibility;
     }
 
-    void setVisibility(uint visi)
+    void setVisibility(Attributes visi)
     {
         m_attributes = (m_attributes & ~Visibility) | visi;
     }
@@ -286,14 +295,21 @@ public:
     }
 
 private:
-    uint m_attributes;
-    uint m_originalAttributes;
+    Attributes m_attributes;
+    Attributes m_originalAttributes;
     Documentation m_doc;
 };
+
+Q_DECLARE_OPERATORS_FOR_FLAGS(AbstractMetaAttributes::Attributes)
+
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const AbstractMetaAttributes *aa);
+#endif
 
 typedef QList<AbstractMetaType*> AbstractMetaTypeList;
 class AbstractMetaType
 {
+    Q_GADGET
 public:
 
     enum TypeUsagePattern {
@@ -315,6 +331,7 @@ public:
         ArrayPattern,
         ThreadPattern
     };
+    Q_ENUM(TypeUsagePattern)
 
     AbstractMetaType();
     ~AbstractMetaType();
@@ -326,7 +343,8 @@ public:
     QString name() const
     {
         if (m_name.isNull())
-            m_name = m_typeEntry->targetLangName().split("::").last();
+            // avoid constLast to stay Qt 5.5 compatible
+            m_name = m_typeEntry->targetLangName().split(QLatin1String("::")).last();
         return m_name;
     }
     QString fullName() const
@@ -592,6 +610,8 @@ public:
     /// Decides and sets the proper usage patter for the current meta type.
     void decideUsagePattern();
 
+    bool hasTemplateChildren() const;
+
 private:
     const TypeEntry *m_typeEntry;
     AbstractMetaTypeList m_instantiations;
@@ -614,6 +634,10 @@ private:
 
     Q_DISABLE_COPY(AbstractMetaType);
 };
+
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const AbstractMetaType *at);
+#endif
 
 class AbstractMetaVariable
 {
@@ -681,7 +705,9 @@ private:
     Documentation m_doc;
 };
 
-
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const AbstractMetaVariable *av);
+#endif
 
 class AbstractMetaArgument : public AbstractMetaVariable
 {
@@ -708,8 +734,8 @@ public:
 
     QString toString() const
     {
-        return type()->name() + " " + AbstractMetaVariable::name() +
-               (m_expression.isEmpty() ? "" :  " = " + m_expression);
+        return type()->name() + QLatin1Char(' ') + AbstractMetaVariable::name() +
+               (m_expression.isEmpty() ? QString() :  QLatin1String(" = ") + m_expression);
     }
 
     int argumentIndex() const
@@ -730,6 +756,9 @@ private:
     friend class AbstractMetaClass;
 };
 
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const AbstractMetaArgument *aa);
+#endif
 
 class AbstractMetaField : public AbstractMetaVariable, public AbstractMetaAttributes
 {
@@ -764,8 +793,13 @@ private:
     const AbstractMetaClass *m_class;
 };
 
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const AbstractMetaField *af);
+#endif
+
 class AbstractMetaFunction : public AbstractMetaAttributes
 {
+    Q_GADGET
 public:
     enum FunctionType {
         ConstructorFunction,
@@ -776,8 +810,9 @@ public:
         SlotFunction,
         GlobalScopeFunction
     };
+    Q_ENUM(FunctionType)
 
-    enum CompareResult {
+    enum CompareResultFlag {
         EqualName                   = 0x00000001,
         EqualArguments              = 0x00000002,
         EqualAttributes             = 0x00000004,
@@ -792,6 +827,8 @@ public:
         Equal                       = 0x0000001f,
         NotEqual                    = 0x00001000
     };
+    Q_DECLARE_FLAGS(CompareResult, CompareResultFlag)
+    Q_FLAG(CompareResultFlag)
 
     AbstractMetaFunction()
             : m_typeEntry(0),
@@ -1073,7 +1110,7 @@ public:
         return m_name;
     }
 
-    uint compareTo(const AbstractMetaFunction *other) const;
+    CompareResult compareTo(const AbstractMetaFunction *other) const;
 
     bool operator <(const AbstractMetaFunction &a) const;
 
@@ -1191,6 +1228,11 @@ private:
     uint m_isCallOperator           : 1;
 };
 
+Q_DECLARE_OPERATORS_FOR_FLAGS(AbstractMetaFunction::CompareResult)
+
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const AbstractMetaFunction *af);
+#endif
 
 class AbstractMetaEnumValue
 {
@@ -1299,7 +1341,7 @@ public:
 
     QString fullName() const
     {
-        return package() + "." + qualifier()  + "." + name();
+        return package() + QLatin1Char('.') + qualifier()  + QLatin1Char('.') + name();
     }
 
     // Has the enum been declared inside a Q_ENUMS() macro in its enclosing class?
@@ -1346,10 +1388,15 @@ private:
     uint m_hasQenumsDeclaration : 1;
 };
 
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const AbstractMetaEnum *ae);
+#endif
+
 typedef QList<AbstractMetaEnum *> AbstractMetaEnumList;
 
 class AbstractMetaClass : public AbstractMetaAttributes
 {
+    Q_GADGET
 public:
     enum FunctionQueryOption {
         Constructors                 = 0x0000001, // Only constructors
@@ -1379,6 +1426,8 @@ public:
         VirtualSlots                 = 0x1000000, // Only functions that are set as virtual slots in the type system
         OperatorOverloads            = 0x2000000  // Only functions that are operator overloads
     };
+    Q_DECLARE_FLAGS(FunctionQueryOptions, FunctionQueryOption)
+    Q_FLAG(FunctionQueryOption)
 
     enum OperatorQueryOption {
         ArithmeticOp   = 0x01, // Arithmetic: +, -, *, /, %, +=, -=, *=, /=, %=, ++, --, unary+, unary-
@@ -1393,6 +1442,8 @@ public:
                         | LogicalOp | ConversionOp | SubscriptionOp
                         | AssignmentOp | OtherOp
     };
+    Q_DECLARE_FLAGS(OperatorQueryOptions, OperatorQueryOption)
+    Q_FLAG(OperatorQueryOption)
 
     AbstractMetaClass()
             : m_hasVirtuals(false),
@@ -1485,7 +1536,7 @@ public:
     }
 
     AbstractMetaFunctionList queryFunctionsByName(const QString &name) const;
-    AbstractMetaFunctionList queryFunctions(uint query) const;
+    AbstractMetaFunctionList queryFunctions(FunctionQueryOptions query) const;
     inline AbstractMetaFunctionList allVirtualFunctions() const;
     inline AbstractMetaFunctionList allFinalFunctions() const;
     AbstractMetaFunctionList functionsInTargetLang() const;
@@ -1506,7 +1557,7 @@ public:
      *   /return list of operator overload methods that meet the
      *   query criteria
      */
-    AbstractMetaFunctionList operatorOverloads(uint query = AllOperators) const;
+    AbstractMetaFunctionList operatorOverloads(OperatorQueryOptions query = AllOperators) const;
 
     bool hasOperatorOverload() const;
     bool hasArithmeticOperatorOverload() const;
@@ -1559,7 +1610,7 @@ public:
 
     QString fullName() const
     {
-        return package() + "." + name();
+        return package() + QLatin1Char('.') + name();
     }
 
     /**
@@ -1627,7 +1678,7 @@ public:
 
     bool isQtNamespace() const
     {
-        return isNamespace() && name() == "Qt";
+        return isNamespace() && name() == QLatin1String("Qt");
     }
 
     QString qualifiedCppName() const
@@ -1905,6 +1956,9 @@ public:
         return m_hasToStringCapability;
     }
 private:
+#ifndef QT_NO_DEBUG_STREAM
+    friend QDebug operator<<(QDebug d, const AbstractMetaClass *ac);
+#endif
     uint m_hasVirtuals : 1;
     uint m_isPolymorphic : 1;
     uint m_hasNonpublic : 1;
@@ -1951,6 +2005,9 @@ private:
     bool m_stream;
     static int m_count;
 };
+
+Q_DECLARE_OPERATORS_FOR_FLAGS(AbstractMetaClass::FunctionQueryOptions)
+Q_DECLARE_OPERATORS_FOR_FLAGS(AbstractMetaClass::OperatorQueryOptions)
 
 class QPropertySpec
 {

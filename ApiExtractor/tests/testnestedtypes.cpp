@@ -1,25 +1,30 @@
-/*
-* This file is part of the API Extractor project.
-*
-* Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-*
-* Contact: PySide team <contact@pyside.org>
-*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but
-* WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-* General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA
-*
-*/
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of the test suite of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "testnestedtypes.h"
 #include <QtTest/QTest>
@@ -54,28 +59,28 @@ void TestNestedTypes::testNestedTypesModifications()
     TestUtil t(cppCode, xmlCode, false);
     AbstractMetaClassList classes = t.builder()->classes();
 
-    AbstractMetaClass* ons = classes.findClass("OuterNamespace");
+    AbstractMetaClass* ons = classes.findClass(QLatin1String("OuterNamespace"));
     QVERIFY(ons);
 
-    AbstractMetaClass* ins = classes.findClass("OuterNamespace::InnerNamespace");
+    AbstractMetaClass* ins = classes.findClass(QLatin1String("OuterNamespace::InnerNamespace"));
     QVERIFY(ins);
     QCOMPARE(ins->functions().count(), 1);
     QCOMPARE(ins->typeEntry()->codeSnips().count(), 1);
     CodeSnip snip = ins->typeEntry()->codeSnips().first();
-    QCOMPARE(snip.code(), QString("custom_code1();"));
+    QCOMPARE(snip.code(), QLatin1String("custom_code1();"));
 
     AbstractMetaFunction* addedFunc = ins->functions().first();
     QVERIFY(addedFunc->isUserAdded());
-    QCOMPARE(addedFunc->visibility(), uint(AbstractMetaFunction::Public));
+    QCOMPARE(addedFunc->visibility(), AbstractMetaFunction::Public);
     QCOMPARE(addedFunc->functionType(), AbstractMetaFunction::NormalFunction);
-    QCOMPARE(addedFunc->type()->minimalSignature(), QString("OuterNamespace::InnerNamespace::SomeClass"));
+    QCOMPARE(addedFunc->type()->minimalSignature(), QLatin1String("OuterNamespace::InnerNamespace::SomeClass"));
 
     QCOMPARE(addedFunc->modifications().size(), 1);
     QVERIFY(addedFunc->modifications().first().isCodeInjection());
     snip = addedFunc->modifications().first().snips.first();
-    QCOMPARE(snip.code(), QString("custom_code2();"));
+    QCOMPARE(snip.code(), QLatin1String("custom_code2();"));
 
-    AbstractMetaClass* sc = classes.findClass("OuterNamespace::InnerNamespace::SomeClass");
+    AbstractMetaClass* sc = classes.findClass(QLatin1String("OuterNamespace::InnerNamespace::SomeClass"));
     QVERIFY(ins);
     QCOMPARE(sc->functions().count(), 2); // default constructor and removed method
     AbstractMetaFunction* removedFunc = sc->functions().last();
@@ -101,22 +106,20 @@ void TestNestedTypes::testDuplicationOfNestedTypes()
     TestUtil t(cppCode, xmlCode, false);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 2);
-    AbstractMetaClass* nspace = classes.findClass("Namespace");
+    AbstractMetaClass* nspace = classes.findClass(QLatin1String("Namespace"));
     QVERIFY(nspace);
-    AbstractMetaClass* cls1 = classes.findClass("SomeClass");
+    AbstractMetaClass* cls1 = classes.findClass(QLatin1String("SomeClass"));
     QVERIFY(cls1);
-    AbstractMetaClass* cls2 = classes.findClass("Namespace::SomeClass");
+    AbstractMetaClass* cls2 = classes.findClass(QLatin1String("Namespace::SomeClass"));
     QVERIFY(cls2);
     QCOMPARE(cls1, cls2);
-    QCOMPARE(cls1->name(), QString("SomeClass"));
-    QCOMPARE(cls1->qualifiedCppName(), QString("Namespace::SomeClass"));
+    QCOMPARE(cls1->name(), QLatin1String("SomeClass"));
+    QCOMPARE(cls1->qualifiedCppName(), QLatin1String("Namespace::SomeClass"));
 
-    TypeEntry* t1 = TypeDatabase::instance()->findType("Namespace::SomeClass");
+    TypeEntry* t1 = TypeDatabase::instance()->findType(QLatin1String("Namespace::SomeClass"));
     QVERIFY(t1);
-    TypeEntry* t2 = TypeDatabase::instance()->findType("SomeClass");
+    TypeEntry* t2 = TypeDatabase::instance()->findType(QLatin1String("SomeClass"));
     QVERIFY(!t2);
 }
 
 QTEST_APPLESS_MAIN(TestNestedTypes)
-
-#include "testnestedtypes.moc"

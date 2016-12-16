@@ -1,25 +1,30 @@
-/*
-* This file is part of the API Extractor project.
-*
-* Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-*
-* Contact: PySide team <contact@pyside.org>
-*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but
-* WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-* General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA
-*
-*/
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of the test suite of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "testabstractmetaclass.h"
 #include "abstractmetabuilder.h"
@@ -33,7 +38,7 @@ void TestAbstractMetaClass::testClassName()
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 1);
-    QCOMPARE(classes[0]->name(), QString("ClassName"));
+    QCOMPARE(classes[0]->name(), QLatin1String("ClassName"));
 }
 
 void TestAbstractMetaClass::testClassNameUnderNamespace()
@@ -47,12 +52,12 @@ void TestAbstractMetaClass::testClassNameUnderNamespace()
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 2); // 1 namespace + 1 class
-    if (classes.first()->name() != "ClassName")
+    if (classes.first()->name() != QLatin1String("ClassName"))
         classes.swap(0, 1);
 
-    QCOMPARE(classes[0]->name(), QString("ClassName"));
-    QCOMPARE(classes[0]->qualifiedCppName(), QString("Namespace::ClassName"));
-    QCOMPARE(classes[1]->name(), QString("Namespace"));
+    QCOMPARE(classes[0]->name(), QLatin1String("ClassName"));
+    QCOMPARE(classes[0]->qualifiedCppName(), QLatin1String("Namespace::ClassName"));
+    QCOMPARE(classes[1]->name(), QLatin1String("Namespace"));
     QVERIFY(classes[1]->isNamespace());
 
     // Check ctors info
@@ -61,13 +66,13 @@ void TestAbstractMetaClass::testClassNameUnderNamespace()
 
     AbstractMetaFunctionList ctors = classes[0]->queryFunctions(AbstractMetaClass::Constructors);
     QCOMPARE(ctors.size(), 2);
-    if (ctors.first()->minimalSignature() != "ClassName()")
+    if (ctors.first()->minimalSignature() != QLatin1String("ClassName()"))
         ctors.swap(0, 1);
 
     QCOMPARE(ctors[0]->arguments().size(), 0);
-    QCOMPARE(ctors[0]->minimalSignature(), QString("ClassName()"));
+    QCOMPARE(ctors[0]->minimalSignature(), QLatin1String("ClassName()"));
     QCOMPARE(ctors[1]->arguments().size(), 1);
-    QCOMPARE(ctors[1]->minimalSignature(), QString("ClassName(Namespace::ClassName)"));
+    QCOMPARE(ctors[1]->minimalSignature(), QLatin1String("ClassName(Namespace::ClassName)"));
 
     QVERIFY(!classes[0]->hasPrivateDestructor());
     QVERIFY(classes[0]->hasCloneOperator()); // implicit default copy ctor
@@ -100,9 +105,9 @@ void TestAbstractMetaClass::testVirtualMethods()
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 3);
-    AbstractMetaClass* a = classes.findClass("A");
-    AbstractMetaClass* b = classes.findClass("B");
-    AbstractMetaClass* c = classes.findClass("C");
+    AbstractMetaClass* a = classes.findClass(QLatin1String("A"));
+    AbstractMetaClass* b = classes.findClass(QLatin1String("B"));
+    AbstractMetaClass* c = classes.findClass(QLatin1String("C"));
 
     AbstractMetaClass* no_class = 0;
 
@@ -168,9 +173,9 @@ void TestAbstractMetaClass::testDefaultValues()
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 2);
-    AbstractMetaClass* classA = classes.findClass("A");
-    QCOMPARE(classA->queryFunctionsByName("method").count(), 1);
-    AbstractMetaFunction* method = classA->queryFunctionsByName("method").first();
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    QCOMPARE(classA->queryFunctionsByName(QLatin1String("method")).count(), 1);
+    AbstractMetaFunction* method = classA->queryFunctionsByName(QLatin1String("method")).first();
     AbstractMetaArgument* arg = method->arguments().first();
     QCOMPARE(arg->defaultValueExpression(), arg->originalDefaultValueExpression());
 }
@@ -197,12 +202,12 @@ void TestAbstractMetaClass::testModifiedDefaultValues()
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 2);
-    AbstractMetaClass* classA = classes.findClass("A");
-    QCOMPARE(classA->queryFunctionsByName("method").count(), 1);
-    AbstractMetaFunction* method = classA->queryFunctionsByName("method").first();
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    QCOMPARE(classA->queryFunctionsByName(QLatin1String("method")).count(), 1);
+    AbstractMetaFunction* method = classA->queryFunctionsByName(QLatin1String("method")).first();
     AbstractMetaArgument* arg = method->arguments().first();
-    QCOMPARE(arg->defaultValueExpression(), QString("Hello"));
-    QCOMPARE(arg->originalDefaultValueExpression(), QString("A::B()"));
+    QCOMPARE(arg->defaultValueExpression(), QLatin1String("Hello"));
+    QCOMPARE(arg->originalDefaultValueExpression(), QLatin1String("A::B()"));
 }
 
 void TestAbstractMetaClass::testInnerClassOfAPolymorphicOne()
@@ -221,10 +226,10 @@ void TestAbstractMetaClass::testInnerClassOfAPolymorphicOne()
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 2);
-    AbstractMetaClass* classA = classes.findClass("A");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
     QVERIFY(classA);
     QVERIFY(classA->isPolymorphic());
-    AbstractMetaClass* classB = classes.findClass("A::B");
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("A::B"));
     QVERIFY(classB);
     QVERIFY(!classB->isPolymorphic());
 }
@@ -273,53 +278,53 @@ void TestAbstractMetaClass::testClassDefaultConstructors()
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 6);
 
-    AbstractMetaClass* classA = classes.findClass("A");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
     QVERIFY(classA);
     QCOMPARE(classA->functions().size(), 2);
 
     AbstractMetaFunctionList ctors = classA->queryFunctions(AbstractMetaClass::Constructors);
     QCOMPARE(ctors.size(), 2);
-    if (ctors.first()->minimalSignature() != "A()")
+    if (ctors.first()->minimalSignature() != QLatin1String("A()"))
         ctors.swap(0, 1);
 
     QCOMPARE(ctors[0]->arguments().size(), 0);
-    QCOMPARE(ctors[0]->minimalSignature(), QString("A()"));
+    QCOMPARE(ctors[0]->minimalSignature(), QLatin1String("A()"));
     QCOMPARE(ctors[1]->arguments().size(), 1);
-    QCOMPARE(ctors[1]->minimalSignature(), QString("A(A)"));
+    QCOMPARE(ctors[1]->minimalSignature(), QLatin1String("A(A)"));
 
-    AbstractMetaClass* classB = classes.findClass("B");
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
     QVERIFY(classB);
     QCOMPARE(classB->functions().size(), 2);
-    QCOMPARE(classB->functions().first()->minimalSignature(), QString("B()"));
+    QCOMPARE(classB->functions().first()->minimalSignature(), QLatin1String("B()"));
 
-    AbstractMetaClass* classC = classes.findClass("C");
+    AbstractMetaClass* classC = classes.findClass(QLatin1String("C"));
     QVERIFY(classC);
     QCOMPARE(classC->functions().size(), 1);
-    QCOMPARE(classC->functions().first()->minimalSignature(), QString("C(C)"));
+    QCOMPARE(classC->functions().first()->minimalSignature(), QLatin1String("C(C)"));
 
-    AbstractMetaClass* classD = classes.findClass("D");
+    AbstractMetaClass* classD = classes.findClass(QLatin1String("D"));
     QVERIFY(classD);
     QCOMPARE(classD->functions().size(), 1);
-    QCOMPARE(classD->functions().first()->minimalSignature(), QString("D(D)"));
+    QCOMPARE(classD->functions().first()->minimalSignature(), QLatin1String("D(D)"));
     QVERIFY(classD->functions().first()->isPrivate());
 
-    AbstractMetaClass* classE = classes.findClass("E");
+    AbstractMetaClass* classE = classes.findClass(QLatin1String("E"));
     QVERIFY(classE);
     QVERIFY(classE->hasPrivateDestructor());
     QCOMPARE(classE->functions().size(), 0);
 
-    AbstractMetaClass* classF = classes.findClass("F");
+    AbstractMetaClass* classF = classes.findClass(QLatin1String("F"));
     QVERIFY(classF);
 
     ctors = classF->queryFunctions(AbstractMetaClass::Constructors);
     QCOMPARE(ctors.size(), 2);
-    if (ctors.first()->minimalSignature() != "F(int,int)")
+    if (ctors.first()->minimalSignature() != QLatin1String("F(int,int)"))
         ctors.swap(0, 1);
 
     QCOMPARE(ctors[0]->arguments().size(), 2);
-    QCOMPARE(ctors[0]->minimalSignature(), QString("F(int,int)"));
+    QCOMPARE(ctors[0]->minimalSignature(), QLatin1String("F(int,int)"));
     QCOMPARE(ctors[1]->arguments().size(), 1);
-    QCOMPARE(ctors[1]->minimalSignature(), QString("F(F)"));
+    QCOMPARE(ctors[1]->minimalSignature(), QLatin1String("F(F)"));
 }
 
 void TestAbstractMetaClass::testClassInheritedDefaultConstructors()
@@ -341,27 +346,27 @@ void TestAbstractMetaClass::testClassInheritedDefaultConstructors()
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 2);
-    AbstractMetaClass* classA = classes.findClass("A");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
     QVERIFY(classA);
 
     AbstractMetaFunctionList ctors = classA->queryFunctions(AbstractMetaClass::Constructors);
     QCOMPARE(ctors.size(), 2);
-    if (ctors.first()->minimalSignature() != "A()")
+    if (ctors.first()->minimalSignature() != QLatin1String("A()"))
         ctors.swap(0, 1);
 
     QCOMPARE(ctors[0]->arguments().size(), 0);
-    QCOMPARE(ctors[0]->minimalSignature(), QString("A()"));
+    QCOMPARE(ctors[0]->minimalSignature(), QLatin1String("A()"));
     QCOMPARE(ctors[1]->arguments().size(), 1);
-    QCOMPARE(ctors[1]->minimalSignature(), QString("A(A)"));
+    QCOMPARE(ctors[1]->minimalSignature(), QLatin1String("A(A)"));
     QVERIFY(ctors[1]->isPrivate());
 
-    AbstractMetaClass* classB = classes.findClass("B");
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
     QVERIFY(classB);
 
     ctors = classB->queryFunctions(AbstractMetaClass::Constructors);
     QCOMPARE(ctors.size(), 1);
     QCOMPARE(ctors.first()->arguments().size(), 0);
-    QCOMPARE(ctors.first()->minimalSignature(), QString("B()"));
+    QCOMPARE(ctors.first()->minimalSignature(), QLatin1String("B()"));
 }
 
 void TestAbstractMetaClass::testAbstractClassDefaultConstructors()
@@ -379,13 +384,13 @@ void TestAbstractMetaClass::testAbstractClassDefaultConstructors()
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 1);
-    AbstractMetaClass* classA = classes.findClass("A");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
     QVERIFY(classA);
 
     AbstractMetaFunctionList ctors = classA->queryFunctions(AbstractMetaClass::Constructors);
     QCOMPARE(ctors.size(), 1);
     QCOMPARE(ctors.first()->arguments().size(), 0);
-    QCOMPARE(ctors.first()->minimalSignature(), QString("A()"));
+    QCOMPARE(ctors.first()->minimalSignature(), QLatin1String("A()"));
 }
 
 void TestAbstractMetaClass::testObjectTypesMustNotHaveCopyConstructors()
@@ -399,13 +404,13 @@ void TestAbstractMetaClass::testObjectTypesMustNotHaveCopyConstructors()
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 1);
-    AbstractMetaClass* classA = classes.findClass("A");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
     QVERIFY(classA);
 
     AbstractMetaFunctionList ctors = classA->queryFunctions(AbstractMetaClass::Constructors);
     QCOMPARE(ctors.size(), 1);
     QCOMPARE(ctors.first()->arguments().size(), 0);
-    QCOMPARE(ctors.first()->minimalSignature(), QString("A()"));
+    QCOMPARE(ctors.first()->minimalSignature(), QLatin1String("A()"));
 }
 
 void TestAbstractMetaClass::testIsPolymorphic()
@@ -434,13 +439,11 @@ void TestAbstractMetaClass::testIsPolymorphic()
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 2);
-    AbstractMetaClass* b = classes.findClass("A");
+    AbstractMetaClass* b = classes.findClass(QLatin1String("A"));
 
     QVERIFY(!b->isPolymorphic());
-    AbstractMetaClass* a = classes.findClass("B");
+    AbstractMetaClass* a = classes.findClass(QLatin1String("B"));
     QVERIFY(!a->isPolymorphic());
 }
 
 QTEST_APPLESS_MAIN(TestAbstractMetaClass)
-
-#include "testabstractmetaclass.moc"

@@ -1,25 +1,30 @@
-/*
- * This file is part of the API Extractor project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "fileout.h"
 #include "reporthandler.h"
@@ -167,11 +172,11 @@ static void diff(QList<QByteArray> a, QList<QByteArray> b)
 }
 
 
-bool FileOut::done()
+FileOut::State FileOut::done()
 {
     Q_ASSERT(!isDone);
     if (name.isEmpty())
-        return false;
+        return Failure;
 
     isDone = true;
     bool fileEqual = false;
@@ -181,9 +186,10 @@ bool FileOut::done()
     QByteArray original;
     if (info.exists() && (diff || (info.size() == tmp.size()))) {
         if (!fileRead.open(QIODevice::ReadOnly)) {
-            ReportHandler::warning(QString("failed to open file '%1' for reading")
-                                   .arg(fileRead.fileName()));
-            return false;
+            qCWarning(lcShiboken).noquote().nospace()
+                << QStringLiteral("failed to open file '%1' for reading")
+                                  .arg(QDir::toNativeSeparators(fileRead.fileName()));
+            return Failure;
         }
 
         original = fileRead.readAll();
@@ -191,32 +197,35 @@ bool FileOut::done()
         fileEqual = (original == tmp);
     }
 
-    if (!fileEqual) {
-        if (!FileOut::dummy) {
-            QDir dir(info.absolutePath());
-            if (!dir.mkpath(dir.absolutePath())) {
-                ReportHandler::warning(QString("unable to create directory '%1'")
-                                       .arg(dir.absolutePath()));
-                return false;
-            }
+    if (fileEqual)
+        return Unchanged;
 
-            QFile fileWrite(name);
-            if (!fileWrite.open(QIODevice::WriteOnly)) {
-                ReportHandler::warning(QString("failed to open file '%1' for writing")
-                                       .arg(fileWrite.fileName()));
-                return false;
-            }
-            QTextCodec *codec = QTextCodec::codecForName("UTF-8");
-            stream.setCodec(codec);
-            stream.setDevice(&fileWrite);
-            stream << tmp;
+    if (!FileOut::dummy) {
+        QDir dir(info.absolutePath());
+        if (!dir.mkpath(dir.absolutePath())) {
+            qCWarning(lcShiboken).noquote().nospace()
+                    << QStringLiteral("unable to create directory '%1'")
+                       .arg(QDir::toNativeSeparators(dir.absolutePath()));
+            return Failure;
         }
-        if (diff) {
-            std::printf("%sFile: %s%s\n", colorInfo, qPrintable(name), colorReset);
-            ::diff(original.split('\n'), tmp.split('\n'));
-            std::printf("\n");
+
+        QFile fileWrite(name);
+        if (!fileWrite.open(QIODevice::WriteOnly)) {
+            qCWarning(lcShiboken).noquote().nospace()
+                    << QStringLiteral("failed to open file '%1' for writing")
+                       .arg(QDir::toNativeSeparators(fileWrite.fileName()));
+            return Failure;
         }
-        return true;
+        QTextCodec *codec = QTextCodec::codecForName("UTF-8");
+        stream.setCodec(codec);
+        stream.setDevice(&fileWrite);
+        stream << tmp;
     }
-    return false;
+    if (diff) {
+        std::printf("%sFile: %s%s\n", colorInfo, qPrintable(name), colorReset);
+        ::diff(original.split('\n'), tmp.split('\n'));
+        std::printf("\n");
+    }
+
+    return Success;
 }

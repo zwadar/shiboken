@@ -1,24 +1,41 @@
-/*
- * This file is part of the Shiboken Python Bindings Generator project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "basewrapper.h"
 #include "basewrapper_p.h"
@@ -90,11 +107,14 @@ PyTypeObject SbkObjectType_Type = {
     /*tp_mro*/              0,
     /*tp_cache*/            0,
     /*tp_subclasses*/       0,
-    /*tp_weaklist*/         0
+    /*tp_weaklist*/         0,
+    /*tp_del*/              0,
+    /*tp_version_tag*/      0
 };
 
-static PyObject* SbkObjectGetDict(SbkObject* obj)
+static PyObject *SbkObjectGetDict(PyObject* pObj, void *)
 {
+    SbkObject *obj = reinterpret_cast<SbkObject *>(pObj);
     if (!obj->ob_dict)
         obj->ob_dict = PyDict_New();
     if (!obj->ob_dict)
@@ -104,8 +124,8 @@ static PyObject* SbkObjectGetDict(SbkObject* obj)
 }
 
 static PyGetSetDef SbkObjectGetSetList[] = {
-    {const_cast<char*>("__dict__"), (getter)SbkObjectGetDict, 0},
-    {0} // Sentinel
+    {const_cast<char*>("__dict__"), SbkObjectGetDict, 0, 0, 0},
+    {0, 0, 0, 0, 0} // Sentinel
 };
 
 static int SbkObject_traverse(PyObject* self, visitproc visit, void* arg)
@@ -197,7 +217,9 @@ SbkObjectType SbkObject_Type = { { {
     /*tp_mro*/              0,
     /*tp_cache*/            0,
     /*tp_subclasses*/       0,
-    /*tp_weaklist*/         0
+    /*tp_weaklist*/         0,
+    /*tp_del*/              0,
+    /*tp_version_tag*/      0
 }, },
     /*priv_data*/           0
 };
@@ -519,7 +541,7 @@ void setErrorAboutWrongArguments(PyObject* args, const char* funcName, const cha
     std::string params;
     if (args) {
         if (PyTuple_Check(args)) {
-            for (int i = 0, max = PyTuple_GET_SIZE(args); i < max; ++i) {
+            for (Py_ssize_t i = 0, max = PyTuple_GET_SIZE(args); i < max; ++i) {
                 if (i)
                     params += ", ";
                 PyObject* arg = PyTuple_GET_ITEM(args, i);
@@ -575,7 +597,7 @@ std::list<SbkObject*> splitPyObject(PyObject* pyObj)
     if (PySequence_Check(pyObj)) {
         AutoDecRef lst(PySequence_Fast(pyObj, "Invalid keep reference object."));
         if (!lst.isNull()) {
-            for(int i = 0, i_max = PySequence_Fast_GET_SIZE(lst.object()); i < i_max; i++) {
+            for (Py_ssize_t i = 0, i_max = PySequence_Fast_GET_SIZE(lst.object()); i < i_max; ++i) {
                 PyObject* item = PySequence_Fast_GET_ITEM(lst.object(), i);
                 if (Object::checkType(item))
                     result.push_back(reinterpret_cast<SbkObject*>(item));
@@ -623,7 +645,7 @@ bool canCallConstructor(PyTypeObject* myType, PyTypeObject* ctorType)
 
 
 bool hasExternalCppConversions(SbkObjectType*) { return false; }                    // DEPRECATED.
-bool isExternalConvertible(SbkObjectType* self, PyObject* obj) { return false; }    // DEPRECATED.
+bool isExternalConvertible(SbkObjectType *, PyObject *) { return false; }           // DEPRECATED.
 void setExternalCppConversionFunction(SbkObjectType*, ExtendedToCppFunc) {}         // DEPRECATED.
 void setExternalIsConvertibleFunction(SbkObjectType*, ExtendedIsConvertibleFunc) {} // DEPRECATED.
 void* callExternalCppConversion(SbkObjectType*, PyObject*) { return 0; }            // DEPRECATED.
@@ -1211,7 +1233,7 @@ void setParent(PyObject* parent, PyObject* child)
      */
     if (PySequence_Check(child) && !Object::checkType(child)) {
         Shiboken::AutoDecRef seq(PySequence_Fast(child, 0));
-        for (int i = 0, max = PySequence_Size(seq); i < max; ++i)
+        for (Py_ssize_t i = 0, max = PySequence_Size(seq); i < max; ++i)
             setParent(parent, PySequence_Fast_GET_ITEM(seq.object(), i));
         return;
     }

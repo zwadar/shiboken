@@ -1,25 +1,30 @@
-/*
-* This file is part of the API Extractor project.
-*
-* Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-*
-* Contact: PySide team <contact@pyside.org>
-*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but
-* WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-* General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA
-*
-*/
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of the test suite of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "testtemplates.h"
 #include <QtTest/QTest>
@@ -48,7 +53,7 @@ void TestTemplates::testTemplateWithNamespace()
     file.write(xmlCode0);
     file.close();
 
-    QString xmlCode1 = QString("\
+    QString xmlCode1 = QString::fromLatin1("\
     <typesystem package='Package.Internet'>\
         <load-typesystem name='%1' generate='no'/>\
         <container-type name='QList' type='list'/> \
@@ -60,12 +65,12 @@ void TestTemplates::testTemplateWithNamespace()
     TestUtil t(cppCode, qPrintable(xmlCode1), false);
     AbstractMetaClassList classes = t.builder()->classes();
 
-    AbstractMetaClass* classB = classes.findClass("Bookmarks");
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("Bookmarks"));
     QVERIFY(classB);
-    const AbstractMetaFunction* func = classB->findFunction("list");
+    const AbstractMetaFunction* func = classB->findFunction(QLatin1String("list"));
     AbstractMetaType* funcType = func->type();
     QVERIFY(funcType);
-    QCOMPARE(funcType->cppSignature(), QString("QList<Internet::Url >"));
+    QCOMPARE(funcType->cppSignature(), QLatin1String("QList<Internet::Url >"));
 }
 
 void TestTemplates::testTemplateOnContainers()
@@ -93,21 +98,21 @@ void TestTemplates::testTemplateOnContainers()
     TestUtil t(cppCode, xmlCode, false);
     AbstractMetaClassList classes = t.builder()->classes();
 
-    AbstractMetaClass* classB = classes.findClass("B");
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
     QVERIFY(!classB->baseClass());
     QVERIFY(classB->baseClassName().isNull());
-    const AbstractMetaFunction* func = classB->findFunction("foo");
+    const AbstractMetaFunction* func = classB->findFunction(QLatin1String("foo"));
     AbstractMetaType* argType = func->arguments().first()->type();
     QCOMPARE(argType->instantiations().count(), 1);
-    QCOMPARE(argType->typeEntry()->qualifiedCppName(), QString("QList"));
+    QCOMPARE(argType->typeEntry()->qualifiedCppName(), QLatin1String("QList"));
 
     const AbstractMetaType* instance1 = argType->instantiations().first();
     QCOMPARE(instance1->instantiations().count(), 1);
-    QCOMPARE(instance1->typeEntry()->qualifiedCppName(), QString("Namespace::A"));
+    QCOMPARE(instance1->typeEntry()->qualifiedCppName(), QLatin1String("Namespace::A"));
 
     const AbstractMetaType* instance2 = instance1->instantiations().first();
     QCOMPARE(instance2->instantiations().count(), 0);
-    QCOMPARE(instance2->typeEntry()->qualifiedCppName(), QString("Namespace::E1"));
+    QCOMPARE(instance2->typeEntry()->qualifiedCppName(), QLatin1String("Namespace::E1"));
 }
 
 void TestTemplates::testTemplateValueAsArgument()
@@ -130,8 +135,8 @@ void TestTemplates::testTemplateValueAsArgument()
     QCOMPARE(globalFuncs.count(), 1);
 
     AbstractMetaFunction* func = globalFuncs.first();
-    QCOMPARE(func->minimalSignature(), QString("func(List<int>)"));
-    QCOMPARE(func->arguments().first()->type()->cppSignature(), QString("List<int >"));
+    QCOMPARE(func->minimalSignature(), QLatin1String("func(List<int>)"));
+    QCOMPARE(func->arguments().first()->type()->cppSignature(), QLatin1String("List<int >"));
 }
 
 void TestTemplates::testTemplatePointerAsArgument()
@@ -154,8 +159,8 @@ void TestTemplates::testTemplatePointerAsArgument()
     QCOMPARE(globalFuncs.count(), 1);
 
     AbstractMetaFunction* func = globalFuncs.first();
-    QCOMPARE(func->minimalSignature(), QString("func(List<int>*)"));
-    QCOMPARE(func->arguments().first()->type()->cppSignature(), QString("List<int > *"));
+    QCOMPARE(func->minimalSignature(), QLatin1String("func(List<int>*)"));
+    QCOMPARE(func->arguments().first()->type()->cppSignature(), QLatin1String("List<int > *"));
 }
 
 void TestTemplates::testTemplateReferenceAsArgument()
@@ -178,8 +183,8 @@ void TestTemplates::testTemplateReferenceAsArgument()
     QCOMPARE(globalFuncs.count(), 1);
 
     AbstractMetaFunction* func = globalFuncs.first();
-    QCOMPARE(func->minimalSignature(), QString("func(List<int>&)"));
-    QCOMPARE(func->arguments().first()->type()->cppSignature(), QString("List<int > &"));
+    QCOMPARE(func->minimalSignature(), QLatin1String("func(List<int>&)"));
+    QCOMPARE(func->arguments().first()->type()->cppSignature(), QLatin1String("List<int > &"));
 }
 
 void TestTemplates::testInheritanceFromContainterTemplate()
@@ -211,7 +216,7 @@ void TestTemplates::testInheritanceFromContainterTemplate()
     QCOMPARE(classes.count(), 2);
     QCOMPARE(templates.count(), 1);
 
-    const AbstractMetaClass* foobars = classes.findClass("FooBars");
+    const AbstractMetaClass* foobars = classes.findClass(QLatin1String("FooBars"));
     QCOMPARE(foobars->functions().count(), 4);
 
     const AbstractMetaClass* lc = templates.first();
@@ -243,7 +248,7 @@ void TestTemplates::testTemplateInheritanceMixedWithForwardDeclaration()
     TestUtil t(cppCode, xmlCode, false);
     AbstractMetaClassList classes = t.builder()->classes();
 
-    AbstractMetaClass* classB = classes.findClass("B");
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
     QVERIFY(!classB->baseClass());
     QVERIFY(classB->baseClassName().isNull());
     // 3 functions: simple constructor, copy constructor and "method()".
@@ -278,7 +283,7 @@ void TestTemplates::testTemplateInheritanceMixedWithNamespaceAndForwardDeclarati
     TestUtil t(cppCode, xmlCode, false);
     AbstractMetaClassList classes = t.builder()->classes();
 
-    AbstractMetaClass* classB = classes.findClass("Namespace::B");
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("Namespace::B"));
     QVERIFY(!classB->baseClass());
     QVERIFY(classB->baseClassName().isNull());
     // 3 functions: simple constructor, copy constructor and "method()".
@@ -314,9 +319,9 @@ void TestTemplates::testTypedefOfInstantiationOfTemplateClass()
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 3);
 
-    const AbstractMetaClass* base = classes.findClass("BaseTemplateClass");
+    const AbstractMetaClass* base = classes.findClass(QLatin1String("BaseTemplateClass"));
     QVERIFY(base);
-    const AbstractMetaClass* one = classes.findClass("TypeOneClass");
+    const AbstractMetaClass* one = classes.findClass(QLatin1String("TypeOneClass"));
     QVERIFY(one);
     QCOMPARE(one->templateBaseClass(), base);
     QCOMPARE(one->functions().count(), base->functions().count());
@@ -324,7 +329,7 @@ void TestTemplates::testTypedefOfInstantiationOfTemplateClass()
     const ComplexTypeEntry* oneType = one->typeEntry();
     const ComplexTypeEntry* baseType = base->typeEntry();
     QCOMPARE(oneType->baseContainerType(), baseType);
-    QCOMPARE(one->baseClassNames(), QStringList("BaseTemplateClass<TypeOne>"));
+    QCOMPARE(one->baseClassNames(), QStringList(QLatin1String("BaseTemplateClass<TypeOne>")));
 
     QVERIFY(one->hasTemplateBaseClassInstantiations());
     AbstractMetaTypeList instantiations = one->templateBaseClassInstantiations();
@@ -334,7 +339,7 @@ void TestTemplates::testTypedefOfInstantiationOfTemplateClass()
     QVERIFY(!inst->isEnum());
     QVERIFY(!inst->typeEntry()->isEnum());
     QVERIFY(inst->typeEntry()->isEnumValue());
-    QCOMPARE(inst->cppSignature(), QString("NSpace::TypeOne"));
+    QCOMPARE(inst->cppSignature(), QLatin1String("NSpace::TypeOne"));
 }
 
 void TestTemplates::testContainerTypeIncompleteArgument()
@@ -361,23 +366,21 @@ void TestTemplates::testContainerTypeIncompleteArgument()
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 1);
 
-    AbstractMetaClass* vector = classes.findClass("IntVector");
+    AbstractMetaClass* vector = classes.findClass(QLatin1String("IntVector"));
     QVERIFY(vector);
     QVERIFY(vector->typeEntry()->baseContainerType());
     QCOMPARE(reinterpret_cast<const ContainerTypeEntry*>(vector->typeEntry()->baseContainerType())->type(), ContainerTypeEntry::VectorContainer);
     QCOMPARE(vector->functions().count(), 4);
 
-    const AbstractMetaFunction* method = vector->findFunction("method");
+    const AbstractMetaFunction* method = vector->findFunction(QLatin1String("method"));
     QVERIFY(method);
-    QCOMPARE(method->signature(), QString("method(const Vector<int > & vector)"));
+    QCOMPARE(method->signature(), QLatin1String("method(const Vector<int > & vector)"));
 
-    const AbstractMetaFunction* otherMethod = vector->findFunction("otherMethod");
+    const AbstractMetaFunction* otherMethod = vector->findFunction(QLatin1String("otherMethod"));
     QVERIFY(otherMethod);
-    QCOMPARE(otherMethod->signature(), QString("otherMethod()"));
+    QCOMPARE(otherMethod->signature(), QLatin1String("otherMethod()"));
     QVERIFY(otherMethod->type());
-    QCOMPARE(otherMethod->type()->cppSignature(), QString("Vector<int >"));
+    QCOMPARE(otherMethod->type()->cppSignature(), QLatin1String("Vector<int >"));
 }
 
 QTEST_APPLESS_MAIN(TestTemplates)
-
-#include "testtemplates.moc"

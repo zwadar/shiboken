@@ -1,25 +1,30 @@
-/*
-* This file is part of the API Extractor project.
-*
-* Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-*
-* Contact: PySide team <contact@pyside.org>
-*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but
-* WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-* General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA
-*
-*/
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of the test suite of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "testimplicitconversions.h"
 #include "testutil.h"
@@ -48,8 +53,8 @@ void TestImplicitConversions::testWithPrivateCtors()
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 3);
 
-    AbstractMetaClass* classA = classes.findClass("A");
-    AbstractMetaClass* classC = classes.findClass("C");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    AbstractMetaClass* classC = classes.findClass(QLatin1String("C"));
     AbstractMetaFunctionList implicitConvs = classA->implicitConversions();
     QCOMPARE(implicitConvs.count(), 1);
     QCOMPARE(implicitConvs.first()->arguments().first()->type()->typeEntry(), classC->typeEntry());
@@ -77,8 +82,8 @@ void TestImplicitConversions::testWithModifiedVisibility()
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 2);
-    AbstractMetaClass* classA = classes.findClass("A");
-    AbstractMetaClass* classB = classes.findClass("B");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
     AbstractMetaFunctionList implicitConvs = classA->implicitConversions();
     QCOMPARE(implicitConvs.count(), 1);
     QCOMPARE(implicitConvs.first()->arguments().first()->type()->typeEntry(), classB->typeEntry());
@@ -111,12 +116,12 @@ void TestImplicitConversions::testWithAddedCtor()
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 3);
 
-    AbstractMetaClass* classA = classes.findClass("A");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
     AbstractMetaFunctionList implicitConvs = classA->implicitConversions();
     QCOMPARE(implicitConvs.count(), 2);
 
     // Added constructors with custom types should never result in implicit converters.
-    AbstractMetaClass* classB = classes.findClass("B");
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
     implicitConvs = classB->implicitConversions();
     QCOMPARE(implicitConvs.count(), 0);
 }
@@ -137,8 +142,8 @@ void TestImplicitConversions::testWithExternalConversionOperator()
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.count(), 2);
-    AbstractMetaClass* classA = classes.findClass("A");
-    AbstractMetaClass* classB = classes.findClass("B");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
     AbstractMetaFunctionList implicitConvs = classA->implicitConversions();
     QCOMPARE(implicitConvs.count(), 1);
     AbstractMetaFunctionList externalConvOps = classA->externalConversionOperators();
@@ -154,5 +159,3 @@ void TestImplicitConversions::testWithExternalConversionOperator()
 }
 
 QTEST_APPLESS_MAIN(TestImplicitConversions)
-
-#include "testimplicitconversions.moc"

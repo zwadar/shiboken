@@ -1,25 +1,30 @@
-/*
- * This file is part of the API Extractor project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "apiextractor.h"
 #include <QDir>
@@ -44,10 +49,9 @@ ApiExtractor::ApiExtractor() : m_builder(0)
     if (!qrcInitialized)
         Q_INIT_RESOURCE(generator);
     // Environment TYPESYSTEMPATH
-    QString envTypesystemPaths = getenv("TYPESYSTEMPATH");
+    QString envTypesystemPaths = QFile::decodeName(getenv("TYPESYSTEMPATH"));
     if (!envTypesystemPaths.isEmpty())
         TypeDatabase::instance()->addTypesystemPath(envTypesystemPaths);
-    ReportHandler::setContext("ApiExtractor");
 }
 
 ApiExtractor::~ApiExtractor()
@@ -62,7 +66,7 @@ void ApiExtractor::addTypesystemSearchPath (const QString& path)
 
 void ApiExtractor::addTypesystemSearchPath(const QStringList& paths)
 {
-    foreach (QString path, paths)
+    foreach (const QString &path, paths)
         addTypesystemSearchPath(path);
 }
 
@@ -108,7 +112,7 @@ void ApiExtractor::setSilent ( bool value )
 
 void ApiExtractor::setApiVersion(double version)
 {
-    TypeDatabase::instance()->setApiVersion("*", QByteArray::number(version));
+    TypeDatabase::instance()->setApiVersion(QLatin1String("*"), QByteArray::number(version));
 }
 
 void ApiExtractor::setApiVersion(const QString& package, const QByteArray& version)
@@ -118,8 +122,8 @@ void ApiExtractor::setApiVersion(const QString& package, const QByteArray& versi
 
 void ApiExtractor::setDropTypeEntries(QString dropEntries)
 {
-    dropEntries.remove(' ');
-    QStringList entries = dropEntries.split(';');
+    dropEntries.remove(QLatin1Char(' '));
+    QStringList entries = dropEntries.split(QLatin1Char(';'));
     TypeDatabase::instance()->setDropTypeEntries(entries);
 }
 
@@ -270,7 +274,8 @@ static bool preprocess(const QString& sourceFile,
 
     const char *ppconfig = ":/trolltech/generator/pp-qt-configuration";
 
-    QFile file(ppconfig);
+    const QString fileName = QLatin1String(ppconfig);
+    QFile file(fileName);
     if (!file.open(QFile::ReadOnly)) {
         std::cerr << "Preprocessor configuration file not found " << ppconfig << std::endl;
         return false;
@@ -281,7 +286,7 @@ static bool preprocess(const QString& sourceFile,
     preprocess.operator()(ba.constData(), ba.constData() + ba.size(), null_out);
 
     preprocess.push_include_path(".");
-    foreach (QString include, includes)
+    foreach (const QString &include, includes)
         preprocess.push_include_path(QDir::toNativeSeparators(include).toStdString());
     preprocess.push_include_path("/usr/include");
 
@@ -315,3 +320,36 @@ static bool preprocess(const QString& sourceFile,
     return true;
 }
 
+#ifndef QT_NO_DEBUG_STREAM
+template <class Container>
+static void debugFormatSequence(QDebug &d, const char *key, const Container& c)
+{
+    typedef typename Container::const_iterator ConstIt;
+    if (c.isEmpty())
+        return;
+    const ConstIt begin = c.begin();
+    const ConstIt end = c.end();
+    d << "\n  " << key << '[' << c.size() << "]=(";
+    for (ConstIt it = begin; it != end; ++it) {
+        if (it != begin)
+            d << ", ";
+        d << *it;
+    }
+    d << ')';
+}
+
+QDebug operator<<(QDebug d, const ApiExtractor &ae)
+{
+    QDebugStateSaver saver(d);
+    d.noquote();
+    d.nospace();
+    d << "ApiExtractor(typeSystem=\"" << ae.typeSystem() << "\", cppFileName=\""
+      << ae.cppFileName() << ", classCount=" << ae.classCount();
+    debugFormatSequence(d, "qtMetaTypeDeclaredTypeNames", ae.qtMetaTypeDeclaredTypeNames());
+    debugFormatSequence(d, "globalEnums", ae.globalEnums());
+    debugFormatSequence(d, "globalFunctions", ae.globalFunctions());
+    debugFormatSequence(d, "classes", ae.classes());
+    d << ')';
+    return d;
+}
+#endif // QT_NO_DEBUG_STREAM

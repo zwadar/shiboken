@@ -1,25 +1,30 @@
-/*
-* This file is part of the API Extractor project.
-*
-* Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-*
-* Contact: PySide team <contact@pyside.org>
-*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but
-* WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-* General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA
-*
-*/
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of the test suite of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "testabstractmetatype.h"
 #include <QtTest/QTest>
@@ -38,8 +43,8 @@ void TestAbstractMetaType::testConstCharPtrType()
     AbstractMetaType* rtype = func->type();
     // Test properties of const char*
     QVERIFY(rtype);
-    QCOMPARE(rtype->package(), QString("Foo"));
-    QCOMPARE(rtype->name(), QString("char"));
+    QCOMPARE(rtype->package(), QLatin1String("Foo"));
+    QCOMPARE(rtype->name(), QLatin1String("char"));
     QVERIFY(rtype->isConstant());
     QVERIFY(!rtype->isArray());
     QVERIFY(!rtype->isContainer());
@@ -99,7 +104,7 @@ void TestAbstractMetaType::testCharType()
 
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.size(), 1);
-    QCOMPARE(classes.first()->package(), QString("Foo"));
+    QCOMPARE(classes.first()->package(), QLatin1String("Foo"));
 
     AbstractMetaFunctionList functions = t.builder()->globalFunctions();
     QCOMPARE(functions.size(), 1);
@@ -107,8 +112,8 @@ void TestAbstractMetaType::testCharType()
     AbstractMetaType* rtype = func->type();
     // Test properties of const char*
     QVERIFY(rtype);
-    QCOMPARE(rtype->package(), QString("Foo"));
-    QCOMPARE(rtype->name(), QString("char"));
+    QCOMPARE(rtype->package(), QLatin1String("Foo"));
+    QCOMPARE(rtype->name(), QLatin1String("char"));
     QVERIFY(!rtype->isConstant());
     QVERIFY(!rtype->isArray());
     QVERIFY(!rtype->isContainer());
@@ -136,7 +141,7 @@ void TestAbstractMetaType::testTypedef()
 
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.size(), 1);
-    AbstractMetaClass* c = classes.findClass("C");
+    AbstractMetaClass* c = classes.findClass(QLatin1String("C"));
     QVERIFY(c);
     QVERIFY(c->isTypeAlias());
 }
@@ -168,7 +173,7 @@ void TestAbstractMetaType::testTypedefWithTemplates()
     QCOMPARE(args.count(), 1);
     AbstractMetaArgument* arg = args.first();
     AbstractMetaType* metaType = arg->type();
-    QCOMPARE(metaType->cppSignature(), QString("A<B >"));
+    QCOMPARE(metaType->cppSignature(), QLatin1String("A<B >"));
 }
 
 
@@ -186,9 +191,9 @@ void TestAbstractMetaType::testObjectTypeUsedAsValue()
 
     AbstractMetaClassList classes = t.builder()->classes();
     QCOMPARE(classes.size(), 1);
-    AbstractMetaClass* classA = classes.findClass("A");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
     QVERIFY(classA);
-    AbstractMetaFunctionList overloads = classA->queryFunctionsByName("method");
+    AbstractMetaFunctionList overloads = classA->queryFunctionsByName(QLatin1String("method"));
     QCOMPARE(overloads.count(), 1);
     AbstractMetaFunction* method = overloads.first();
     QVERIFY(method);
@@ -196,11 +201,9 @@ void TestAbstractMetaType::testObjectTypeUsedAsValue()
     QCOMPARE(args.count(), 1);
     AbstractMetaArgument* arg = args.first();
     AbstractMetaType* metaType = arg->type();
-    QCOMPARE(metaType->cppSignature(), QString("A"));
+    QCOMPARE(metaType->cppSignature(), QLatin1String("A"));
     QVERIFY(metaType->isValue());
     QVERIFY(metaType->typeEntry()->isObject());
 }
 
 QTEST_APPLESS_MAIN(TestAbstractMetaType)
-
-#include "testabstractmetatype.moc"

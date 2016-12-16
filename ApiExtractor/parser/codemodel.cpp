@@ -1,30 +1,36 @@
-/*
- * This file is part of the API Extractor project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- * Copyright (C) 2002-2005 Roberto Raggi <roberto@kdevelop.org>
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2002-2005 Roberto Raggi <roberto@kdevelop.org>
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 
 #include "codemodel.h"
 #include <algorithm>
+#include <iostream>
 
 // ---------------------------------------------------------------------------
 CodeModel::CodeModel()
@@ -130,8 +136,11 @@ TypeInfo TypeInfo::resolveType(TypeInfo const &__type, CodeModelItem __scope)
     CodeModel *__model = __scope->model();
     Q_ASSERT(__model != 0);
 
-    CodeModelItem __item = __model->findItem(__type.qualifiedName(), __scope);
+    return TypeInfo::resolveType(__model->findItem(__type.qualifiedName(), __scope),  __type, __scope);
+}
 
+TypeInfo TypeInfo::resolveType(CodeModelItem __item, TypeInfo const &__type, CodeModelItem __scope)
+{
     // Copy the type and replace with the proper qualified name. This
     // only makes sence to do if we're actually getting a resolved
     // type with a namespace. We only get this if the returned type
@@ -142,8 +151,21 @@ TypeInfo TypeInfo::resolveType(TypeInfo const &__type, CodeModelItem __scope)
         otherType.setQualifiedName(__item->qualifiedName());
     }
 
-    if (TypeAliasModelItem __alias = model_dynamic_cast<TypeAliasModelItem> (__item))
-        return resolveType(TypeInfo::combine(__alias->type(), otherType), __scope);
+    if (TypeAliasModelItem __alias = model_dynamic_cast<TypeAliasModelItem> (__item)) {
+        const TypeInfo combined = TypeInfo::combine(__alias->type(), otherType);
+        const CodeModelItem nextItem = __scope->model()->findItem(combined.qualifiedName(), __scope);
+        if (!nextItem)
+            return combined;
+        // PYSIDE-362, prevent recursion on opaque structs like
+        // typedef struct xcb_connection_t xcb_connection_t;
+        if (nextItem.constData() ==__item.constData()) {
+            std::cerr << "** WARNING Bailing out recursion of " << __FUNCTION__
+                << "() on " << qPrintable(__type.qualifiedName().join(QLatin1String("::")))
+                << std::endl;
+            return otherType;
+        }
+        return resolveType(nextItem, combined, __scope);
+    }
 
     return otherType;
 }
@@ -152,7 +174,7 @@ QString TypeInfo::toString() const
 {
     QString tmp;
 
-    tmp += m_qualifiedName.join("::");
+    tmp += m_qualifiedName.join(QLatin1String("::"));
     if (isConstant())
         tmp += QLatin1String(" const");
 
@@ -173,13 +195,13 @@ QString TypeInfo::toString() const
 
             tmp += m_arguments.at(i).toString();
         }
-        tmp += QLatin1String(")");
+        tmp += QLatin1Char(')');
     }
 
     foreach(QString elt, arrayElements()) {
-        tmp += QLatin1String("[");
+        tmp += QLatin1Char('[');
         tmp += elt;
-        tmp += QLatin1String("]");
+        tmp += QLatin1Char(']');
     }
 
     return tmp;
@@ -415,7 +437,7 @@ EnumList _ScopeModelItem::enums() const
 void _ScopeModelItem::addClass(ClassModelItem item)
 {
     QString name = item->name();
-    int idx = name.indexOf("<");
+    int idx = name.indexOf(QLatin1Char('<'));
     if (idx > 0)
         _M_classes.insert(name.left(idx), item);
     _M_classes.insert(name, item);

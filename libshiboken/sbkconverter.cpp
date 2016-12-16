@@ -1,24 +1,41 @@
-/*
- * This file is part of the Shiboken Python Bindings Generator project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "sbkconverter.h"
 #include "sbkconverter_p.h"
@@ -26,6 +43,7 @@
 #include "google/dense_hash_map"
 #include "autodecref.h"
 #include "sbkdbg.h"
+#include "helper.h"
 
 static SbkConverter** PrimitiveTypeConverters;
 
@@ -160,6 +178,11 @@ PyObject* pointerToPython(SbkConverter* converter, const void* cppIn)
     assert(converter);
     if (!cppIn)
         Py_RETURN_NONE;
+    if (!converter->pointerToPython) {
+        warning(PyExc_RuntimeWarning, 0, "pointerToPython(): SbkConverter::pointerToPython is null for \"%s\".",
+                converter->pythonType->tp_name);
+        Py_RETURN_NONE;
+    }
     return converter->pointerToPython(cppIn);
 }
 
@@ -177,6 +200,11 @@ PyObject* referenceToPython(SbkConverter* converter, const void* cppIn)
         Py_INCREF(pyOut);
         return pyOut;
     }
+    if (!converter->pointerToPython) {
+        warning(PyExc_RuntimeWarning, 0, "referenceToPython(): SbkConverter::pointerToPython is null for \"%s\".",
+                converter->pythonType->tp_name);
+        Py_RETURN_NONE;
+    }
     return converter->pointerToPython(cppIn);
 }
 
@@ -184,6 +212,11 @@ static inline PyObject* CopyCppToPython(SbkConverter* converter, const void* cpp
 {
     if (!cppIn)
         Py_RETURN_NONE;
+    if (!converter->copyToPython) {
+        warning(PyExc_RuntimeWarning, 0, "CopyCppToPython(): SbkConverter::copyToPython is null for \"%s\".",
+                converter->pythonType->tp_name);
+        Py_RETURN_NONE;
+    }
     return converter->copyToPython(cppIn);
 }
 PyObject* copyToPython(SbkObjectType* type, const void* cppIn)
@@ -336,8 +369,8 @@ bool checkSequenceTypes(PyTypeObject* type, PyObject* pyIn)
     assert(pyIn);
     if (!PySequence_Check(pyIn))
         return false;
-    int size = PySequence_Size(pyIn);
-    for (int i = 0; i < size; ++i) {
+    const Py_ssize_t size = PySequence_Size(pyIn);
+    for (Py_ssize_t i = 0; i < size; ++i) {
         if (!PyObject_TypeCheck(AutoDecRef(PySequence_GetItem(pyIn, i)), type))
             return false;
     }
@@ -349,8 +382,8 @@ bool convertibleSequenceTypes(SbkConverter* converter, PyObject* pyIn)
     assert(pyIn);
     if (!PySequence_Check(pyIn))
         return false;
-    int size = PySequence_Size(pyIn);
-    for (int i = 0; i < size; ++i) {
+    const Py_ssize_t size = PySequence_Size(pyIn);
+    for (Py_ssize_t i = 0; i < size; ++i) {
         if (!isPythonToCppConvertible(converter, AutoDecRef(PySequence_GetItem(pyIn, i))))
             return false;
     }
@@ -485,7 +518,7 @@ SpecificConverter::SpecificConverter(const char* typeName)
     m_converter = getConverter(typeName);
     if (!m_converter)
         return;
-    int len = strlen(typeName);
+    const Py_ssize_t len = strlen(typeName);
     char lastChar = typeName[len -1];
     if (lastChar == '&') {
         m_type = ReferenceConversion;

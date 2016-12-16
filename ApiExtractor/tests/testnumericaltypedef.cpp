@@ -1,25 +1,30 @@
-/*
-* This file is part of the API Extractor project.
-*
-* Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-*
-* Contact: PySide team <contact@pyside.org>
-*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but
-* WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-* General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA
-*
-*/
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of the test suite of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "testnumericaltypedef.h"
 #include <QtTest/QTest>
@@ -47,21 +52,21 @@ void TestNumericalTypedef::testNumericalTypedef()
     const AbstractMetaFunction* funcReal = t.builder()->globalFunctions().last();
     QVERIFY(funcReal);
 
-    if (funcDouble->name() == "funcReal")
+    if (funcDouble->name() == QLatin1String("funcReal"))
         std::swap(funcDouble, funcReal);
 
-    QCOMPARE(funcDouble->minimalSignature(), QString("funcDouble(double)"));
-    QCOMPARE(funcReal->minimalSignature(), QString("funcReal(real)"));
+    QCOMPARE(funcDouble->minimalSignature(), QLatin1String("funcDouble(double)"));
+    QCOMPARE(funcReal->minimalSignature(), QLatin1String("funcReal(real)"));
 
     const AbstractMetaType* doubleType = funcDouble->arguments().first()->type();
     QVERIFY(doubleType);
-    QCOMPARE(doubleType->cppSignature(), QString("double"));
+    QCOMPARE(doubleType->cppSignature(), QLatin1String("double"));
     QVERIFY(doubleType->isPrimitive());
     QVERIFY(doubleType->typeEntry()->isCppPrimitive());
 
     const AbstractMetaType* realType = funcReal->arguments().first()->type();
     QVERIFY(realType);
-    QCOMPARE(realType->cppSignature(), QString("real"));
+    QCOMPARE(realType->cppSignature(), QLatin1String("real"));
     QVERIFY(realType->isPrimitive());
     QVERIFY(realType->typeEntry()->isCppPrimitive());
 }
@@ -89,25 +94,24 @@ void TestNumericalTypedef::testUnsignedNumericalTypedef()
     const AbstractMetaFunction* funcUShort = t.builder()->globalFunctions().last();
     QVERIFY(funcUShort);
 
-    if (funcUnsignedShort->name() == "funcUShort")
+    if (funcUnsignedShort->name() == QLatin1String("funcUShort"))
         std::swap(funcUnsignedShort, funcUShort);
 
-    QCOMPARE(funcUnsignedShort->minimalSignature(), QString("funcUnsignedShort(unsigned short)"));
-    QCOMPARE(funcUShort->minimalSignature(), QString("funcUShort(ushort)"));
+    QCOMPARE(funcUnsignedShort->minimalSignature(), QLatin1String("funcUnsignedShort(unsigned short)"));
+    QCOMPARE(funcUShort->minimalSignature(), QLatin1String("funcUShort(ushort)"));
 
     const AbstractMetaType* unsignedShortType = funcUnsignedShort->arguments().first()->type();
     QVERIFY(unsignedShortType);
-    QCOMPARE(unsignedShortType->cppSignature(), QString("unsigned short"));
+    QCOMPARE(unsignedShortType->cppSignature(), QLatin1String("unsigned short"));
     QVERIFY(unsignedShortType->isPrimitive());
     QVERIFY(unsignedShortType->typeEntry()->isCppPrimitive());
 
     const AbstractMetaType* ushortType = funcUShort->arguments().first()->type();
     QVERIFY(ushortType);
-    QCOMPARE(ushortType->cppSignature(), QString("ushort"));
+    QCOMPARE(ushortType->cppSignature(), QLatin1String("ushort"));
     QVERIFY(ushortType->isPrimitive());
     QVERIFY(ushortType->typeEntry()->isCppPrimitive());
 }
 
 QTEST_APPLESS_MAIN(TestNumericalTypedef)
 
-#include "testnumericaltypedef.moc"

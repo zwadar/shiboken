@@ -1,25 +1,30 @@
-/*
-* This file is part of the API Extractor project.
-*
-* Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-*
-* Contact: PySide team <contact@pyside.org>
-*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but
-* WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-* General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA
-*
-*/
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of the test suite of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "testconversionoperator.h"
 #include <QtTest/QTest>
@@ -46,9 +51,9 @@ void TestConversionOperator::testConversionOperator()
 
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass("A");
-    AbstractMetaClass* classB = classes.findClass("B");
-    AbstractMetaClass* classC = classes.findClass("C");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    AbstractMetaClass* classC = classes.findClass(QLatin1String("C"));
     QVERIFY(classA);
     QVERIFY(classB);
     QVERIFY(classC);
@@ -83,7 +88,7 @@ void TestConversionOperator::testConversionOperatorOfDiscardedClass()
 
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass("A");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
     QVERIFY(classA);
     QCOMPARE(classA->externalConversionOperators().count(), 0);
 }
@@ -106,8 +111,8 @@ void TestConversionOperator::testRemovedConversionOperator()
 
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass("A");
-    AbstractMetaClass* classB = classes.findClass("B");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
     QVERIFY(classA);
     QVERIFY(classB);
     QCOMPARE(classA->functions().count(), 2);
@@ -131,18 +136,18 @@ void TestConversionOperator::testConversionOperatorReturningReference()
 
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass("A");
-    AbstractMetaClass* classB = classes.findClass("B");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
     QVERIFY(classA);
     QVERIFY(classB);
     QCOMPARE(classA->functions().count(), 2);
     QCOMPARE(classB->functions().count(), 3);
     QCOMPARE(classA->externalConversionOperators().count(), 1);
-    QCOMPARE(classA->externalConversionOperators().first()->type()->cppSignature(), QString("A"));
-    QCOMPARE(classA->externalConversionOperators().first()->ownerClass()->name(), QString("B"));
+    QCOMPARE(classA->externalConversionOperators().first()->type()->cppSignature(), QLatin1String("A"));
+    QCOMPARE(classA->externalConversionOperators().first()->ownerClass()->name(), QLatin1String("B"));
     QCOMPARE(classA->implicitConversions().count(), 1);
-    QCOMPARE(classA->implicitConversions().first()->type()->cppSignature(), QString("A"));
-    QCOMPARE(classA->implicitConversions().first()->ownerClass()->name(), QString("B"));
+    QCOMPARE(classA->implicitConversions().first()->type()->cppSignature(), QLatin1String("A"));
+    QCOMPARE(classA->implicitConversions().first()->ownerClass()->name(), QLatin1String("B"));
 }
 
 void TestConversionOperator::testConversionOperatorReturningConstReference()
@@ -160,20 +165,18 @@ void TestConversionOperator::testConversionOperatorReturningConstReference()
 
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass("A");
-    AbstractMetaClass* classB = classes.findClass("B");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
     QVERIFY(classA);
     QVERIFY(classB);
     QCOMPARE(classA->functions().count(), 2);
     QCOMPARE(classB->functions().count(), 3);
     QCOMPARE(classA->externalConversionOperators().count(), 1);
-    QCOMPARE(classA->externalConversionOperators().first()->type()->cppSignature(), QString("A"));
-    QCOMPARE(classA->externalConversionOperators().first()->ownerClass()->name(), QString("B"));
+    QCOMPARE(classA->externalConversionOperators().first()->type()->cppSignature(), QLatin1String("A"));
+    QCOMPARE(classA->externalConversionOperators().first()->ownerClass()->name(), QLatin1String("B"));
     QCOMPARE(classA->implicitConversions().count(), 1);
-    QCOMPARE(classA->implicitConversions().first()->type()->cppSignature(), QString("A"));
-    QCOMPARE(classA->implicitConversions().first()->ownerClass()->name(), QString("B"));
+    QCOMPARE(classA->implicitConversions().first()->type()->cppSignature(), QLatin1String("A"));
+    QCOMPARE(classA->implicitConversions().first()->ownerClass()->name(), QLatin1String("B"));
 }
 
 QTEST_APPLESS_MAIN(TestConversionOperator)
-
-#include "testconversionoperator.moc"

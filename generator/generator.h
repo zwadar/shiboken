@@ -1,37 +1,45 @@
-/*
- * This file is part of the API Extractor project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #ifndef GENERATOR_H
 #define GENERATOR_H
 
 #include <QtCore/QObject>
 #include <QtCore/QDir>
-#include <QtCore/QLinkedList>
+#include <QtCore/QSharedPointer>
+#include <QtCore/QVector>
 #include <abstractmetalang.h>
 
 class ApiExtractor;
 class AbstractMetaBuilder;
+QT_BEGIN_NAMESPACE
 class QFile;
+QT_END_NAMESPACE
 
 QTextStream& formatCode(QTextStream &s, const QString& code, Indentor &indentor);
 void verifyDirectoryFor(const QFile &file);
@@ -137,13 +145,10 @@ public:
     *   class and the associated text stream, then write the text stream contents if needed.
     *   \see #write
     */
-    void generate();
+    bool generate();
 
     /// Returns the number of generated items
     int numGenerated() const;
-
-    /// Returns the number of generated items written
-    int numGeneratedAndWritten() const;
 
     /// Returns the generator's name. Used for cosmetic purposes.
     virtual const char* name() const = 0;
@@ -278,7 +283,7 @@ protected:
      *   \param  metaClass  the class that should be generated
      */
     virtual void generateClass(QTextStream& s, const AbstractMetaClass* metaClass) = 0;
-    virtual void finishGeneration() = 0;
+    virtual bool finishGeneration() = 0;
 
     /**
     *    Returns the subdirectory path for a given package
@@ -294,7 +299,7 @@ protected:
     QList<const AbstractMetaType*> instantiatedContainers() const;
 
     static QString getSimplifiedContainerTypeName(const AbstractMetaType* type);
-    void addInstantiatedContainers(const AbstractMetaType* type);
+    void addInstantiatedContainers(const AbstractMetaType *type, const QString &context);
 
 private:
     struct GeneratorPrivate;
@@ -305,7 +310,8 @@ private:
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(Generator::Options)
-typedef QLinkedList<Generator*> GeneratorList;
+typedef QSharedPointer<Generator> GeneratorPtr;
+typedef QVector<GeneratorPtr> Generators;
 
 /**
 * Utility class to store the identation level, use it in a QTextStream.

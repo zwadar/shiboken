@@ -1,25 +1,30 @@
-/*
- * This file is part of the API Extractor project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "typeparser.h"
 
@@ -71,7 +76,7 @@ Scanner::Token Scanner::nextToken()
     Token tok = NoToken;
 
     // remove whitespace
-    while (m_pos < m_length && m_chars[m_pos] == ' ')
+    while (m_pos < m_length && m_chars[m_pos] == QLatin1Char(' '))
         ++m_pos;
 
     m_tokenStart = m_pos;
@@ -97,7 +102,7 @@ Scanner::Token Scanner::nextToken()
                 ++m_pos;
                 break;
             default:
-                if (c.isLetterOrNumber() || c == '_')
+                if (c.isLetterOrNumber() || c == QLatin1Char('_'))
                     tok = Identifier;
                 else
                     qFatal("Unrecognized character in lexer: %c", c.toLatin1());
@@ -111,7 +116,7 @@ Scanner::Token Scanner::nextToken()
         }
 
         if (tok == Identifier) {
-            if (c.isLetterOrNumber() || c == '_')
+            if (c.isLetterOrNumber() || c == QLatin1Char('_'))
                 ++m_pos;
             else
                 break;
@@ -119,11 +124,11 @@ Scanner::Token Scanner::nextToken()
     }
 
     if (tok == Identifier && m_pos - m_tokenStart == 5) {
-        if (m_chars[m_tokenStart] == 'c'
-            && m_chars[m_tokenStart + 1] == 'o'
-            && m_chars[m_tokenStart + 2] == 'n'
-            && m_chars[m_tokenStart + 3] == 's'
-            && m_chars[m_tokenStart + 4] == 't')
+        if (m_chars[m_tokenStart] == QLatin1Char('c')
+            && m_chars[m_tokenStart + 1] == QLatin1Char('o')
+            && m_chars[m_tokenStart + 2] == QLatin1Char('n')
+            && m_chars[m_tokenStart + 3] == QLatin1Char('s')
+            && m_chars[m_tokenStart + 4] == QLatin1Char('t'))
             tok = ConstToken;
     }
 
@@ -209,7 +214,7 @@ TypeParser::Info TypeParser::parse(const QString &str)
                 stack.top()->qualified_name << scanner.identifier();
                 colon_prefix = false;
             } else {
-                stack.top()->qualified_name.last().append(" " + scanner.identifier());
+                stack.top()->qualified_name.last().append(QLatin1Char(' ') + scanner.identifier());
             }
             break;
 
@@ -235,12 +240,12 @@ TypeParser::Info TypeParser::parse(const QString &str)
 
 QString TypeParser::Info::instantiationName() const
 {
-    QString s(qualified_name.join("::"));
+    QString s(qualified_name.join(QLatin1String("::")));
     if (!template_instantiations.isEmpty()) {
         QStringList insts;
-        foreach (Info info, template_instantiations)
+        foreach (const Info &info, template_instantiations)
             insts << info.toString();
-        s += QString("< %1 >").arg(insts.join(", "));
+        s += QLatin1String("< ") + insts.join(QLatin1String(", ")) + QLatin1String(" >");
     }
 
     return s;
@@ -250,12 +255,14 @@ QString TypeParser::Info::toString() const
 {
     QString s;
 
-    if (is_constant) s += "const ";
+    if (is_constant)
+        s += QLatin1String("const ");
     s += instantiationName();
     for (int i = 0; i < arrays.size(); ++i)
-        s += "[" + arrays.at(i) + "]";
-    s += QString(indirections, '*');
-    if (is_reference)  s += '&';
+        s += QLatin1Char('[') + arrays.at(i) + QLatin1Char(']');
+    s += QString(indirections, QLatin1Char('*'));
+    if (is_reference)
+        s += QLatin1Char('&');
 
     return s;
 }

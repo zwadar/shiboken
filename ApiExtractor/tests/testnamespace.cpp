@@ -1,25 +1,30 @@
-/*
-* This file is part of the API Extractor project.
-*
-* Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-*
-* Contact: PySide team <contact@pyside.org>
-*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but
-* WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-* General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA
-*
-*/
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of the test suite of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "testnamespace.h"
 #include <QtTest/QTest>
@@ -44,11 +49,11 @@ void TestNamespace::testNamespaceMembers()
     </typesystem>";
     TestUtil t(cppCode, xmlCode, false);
     AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* ns = classes.findClass("Namespace");
+    AbstractMetaClass* ns = classes.findClass(QLatin1String("Namespace"));
     QVERIFY(ns);
-    const AbstractMetaEnum* metaEnum = ns->findEnum("Option");
+    const AbstractMetaEnum* metaEnum = ns->findEnum(QLatin1String("Option"));
     QVERIFY(metaEnum);
-    const AbstractMetaFunction* func = ns->findFunction("foo");
+    const AbstractMetaFunction* func = ns->findFunction(QLatin1String("foo"));
     QVERIFY(func);
 }
 
@@ -73,17 +78,15 @@ void TestNamespace::testNamespaceInnerClassMembers()
     </typesystem>";
     TestUtil t(cppCode, xmlCode, false);
     AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* ons = classes.findClass("OuterNamespace");
+    AbstractMetaClass* ons = classes.findClass(QLatin1String("OuterNamespace"));
     QVERIFY(ons);
-    AbstractMetaClass* ins = classes.findClass("OuterNamespace::InnerNamespace");
+    AbstractMetaClass* ins = classes.findClass(QLatin1String("OuterNamespace::InnerNamespace"));
     QVERIFY(ins);
-    AbstractMetaClass* sc = classes.findClass("OuterNamespace::InnerNamespace::SomeClass");
+    AbstractMetaClass* sc = classes.findClass(QLatin1String("OuterNamespace::InnerNamespace::SomeClass"));
     QVERIFY(sc);
-    const AbstractMetaFunction* meth = sc->findFunction("method");
+    const AbstractMetaFunction* meth = sc->findFunction(QLatin1String("method"));
     QVERIFY(meth);
 }
 
 QTEST_APPLESS_MAIN(TestNamespace)
-
-#include "testnamespace.moc"
 

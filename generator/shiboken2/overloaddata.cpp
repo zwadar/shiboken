@@ -1,25 +1,30 @@
-/*
- * This file is part of the Shiboken Python Bindings Generator project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include <QtCore/QFile>
 #include <reporthandler.h>
@@ -49,7 +54,7 @@ static QString getTypeName(const AbstractMetaType* type)
             const TypeEntry* typeEntry = getAliasedTypeEntry(cType->typeEntry());
             types << typeEntry->name();
         }
-        typeName += QString("<%1 >").arg(types.join(","));
+        typeName += QLatin1Char('<') + types.join(QLatin1Char(',')) + QLatin1String(" >");
     }
     return typeName;
 }
@@ -140,7 +145,8 @@ static QString getImplicitConversionTypeName(const AbstractMetaType* containerTy
         types << (otherType == instantiation ? impConv : getTypeName(otherType));
 
     const ContainerTypeEntry* containerTypeEntry = dynamic_cast<const ContainerTypeEntry*>(containerType->typeEntry());
-    return containerTypeEntry->qualifiedCppName() + '<' + types.join(", ") + " >";
+    return containerTypeEntry->qualifiedCppName() + QLatin1Char('<')
+           + types.join(QLatin1String(", ")) + QLatin1String(" >");
 }
 
 /**
@@ -170,11 +176,13 @@ void OverloadData::sortNextOverloads()
     // Primitive types that are not int, long, short,
     // char and their respective unsigned counterparts.
     QStringList nonIntegerPrimitives;
-    nonIntegerPrimitives << "float" << "double" << "bool";
+    nonIntegerPrimitives << QLatin1String("float") << QLatin1String("double")
+        << QLatin1String("bool");
 
     // Signed integer primitive types.
     QStringList signedIntegerPrimitives;
-    signedIntegerPrimitives << "int" << "short" << "long";
+    signedIntegerPrimitives << QLatin1String("int") << QLatin1String("short")
+       << QLatin1String("long");
 
     // sort the children overloads
     foreach(OverloadData *ov, m_nextOverloadData)
@@ -191,19 +199,19 @@ void OverloadData::sortNextOverloads()
 
         const QString typeName(getTypeName(ov));
 
-        if (!checkPyObject && typeName.contains("PyObject")) {
+        if (!checkPyObject && typeName.contains(QLatin1String("PyObject"))) {
             checkPyObject = true;
             pyobjectIndex = sortData.lastProcessedItemId();
-        } else if (!checkPySequence && typeName == "PySequence") {
+        } else if (!checkPySequence && typeName == QLatin1String("PySequence")) {
             checkPySequence = true;
             pySeqIndex = sortData.lastProcessedItemId();
-        } else if (!checkPyBuffer && typeName == "PyBuffer") {
+        } else if (!checkPyBuffer && typeName == QLatin1String("PyBuffer")) {
             checkPyBuffer = true;
             pyBufferIndex = sortData.lastProcessedItemId();
-        } else if (!checkQVariant && typeName == "QVariant") {
+        } else if (!checkQVariant && typeName == QLatin1String("QVariant")) {
             checkQVariant = true;
             qvariantIndex = sortData.lastProcessedItemId();
-        } else if (!checkQString && typeName == "QString") {
+        } else if (!checkQString && typeName == QLatin1String("QString")) {
             checkQString = true;
             qstringIndex = sortData.lastProcessedItemId();
         }
@@ -248,7 +256,7 @@ void OverloadData::sortNextOverloads()
     const int numPrimitives = sizeof(primitiveTypes)/sizeof(const char*);
     bool hasPrimitive[numPrimitives];
     for (int i = 0; i < numPrimitives; ++i)
-        hasPrimitive[i] = sortData.map.contains(primitiveTypes[i]);
+        hasPrimitive[i] = sortData.map.contains(QLatin1String(primitiveTypes[i]));
 
     if (checkPySequence && checkPyObject)
         graph.addEdge(pySeqIndex, pyobjectIndex);
@@ -268,7 +276,7 @@ void OverloadData::sortNextOverloads()
             else
                 convertibleType = getTypeName(function->arguments().first()->type());
 
-            if (convertibleType == "int" || convertibleType == "unsigned int")
+            if (convertibleType == QLatin1String("int") || convertibleType == QLatin1String("unsigned int"))
                 classesWithIntegerImplicitConversion << targetTypeEntryName;
 
             if (!sortData.map.contains(convertibleType))
@@ -322,9 +330,9 @@ void OverloadData::sortNextOverloads()
 
 
         if ((checkPySequence || checkPyObject || checkPyBuffer)
-            && !targetTypeEntryName.contains("PyObject")
-            && !targetTypeEntryName.contains("PyBuffer")
-            && !targetTypeEntryName.contains("PySequence")) {
+            && !targetTypeEntryName.contains(QLatin1String("PyObject"))
+            && !targetTypeEntryName.contains(QLatin1String("PyBuffer"))
+            && !targetTypeEntryName.contains(QLatin1String("PySequence"))) {
             if (checkPySequence) {
                 // PySequence will be checked after all more specific types, but before PyObject.
                 graph.addEdge(targetTypeId, pySeqIndex);
@@ -335,12 +343,12 @@ void OverloadData::sortNextOverloads()
                 // Add dependency on PyObject, so its check is the last one (too generic).
                 graph.addEdge(targetTypeId, pyobjectIndex);
             }
-        } else if (checkQVariant && targetTypeEntryName != "QVariant") {
+        } else if (checkQVariant && targetTypeEntryName != QLatin1String("QVariant")) {
             if (!graph.containsEdge(qvariantIndex, targetTypeId)) // Avoid cyclic dependency.
                 graph.addEdge(targetTypeId, qvariantIndex);
         } else if (checkQString && ShibokenGenerator::isPointer(ov->argType())
-            && targetTypeEntryName != "QString"
-            && targetTypeEntryName != "QByteArray"
+            && targetTypeEntryName != QLatin1String("QString")
+            && targetTypeEntryName != QLatin1String("QByteArray")
             && (!checkPyObject || targetTypeId != pyobjectIndex)) {
             if (!graph.containsEdge(qstringIndex, targetTypeId)) // Avoid cyclic dependency.
                 graph.addEdge(targetTypeId, qstringIndex);
@@ -350,14 +358,14 @@ void OverloadData::sortNextOverloads()
             // Enum values must precede primitive types.
             for (int i = 0; i < numPrimitives; ++i) {
                 if (hasPrimitive[i])
-                    graph.addEdge(targetTypeId, sortData.map[primitiveTypes[i]]);
+                    graph.addEdge(targetTypeId, sortData.map[QLatin1String(primitiveTypes[i])]);
             }
         }
     }
 
     // QByteArray args need to be checked after QString args
-    if (sortData.map.contains("QString") && sortData.map.contains("QByteArray"))
-        graph.addEdge(sortData.map["QString"], sortData.map["QByteArray"]);
+    if (sortData.map.contains(QLatin1String("QString")) && sortData.map.contains(QLatin1String("QByteArray")))
+        graph.addEdge(sortData.map[QLatin1String("QString")], sortData.map[QLatin1String("QByteArray")]);
 
     foreach(OverloadData* ov, m_nextOverloadData) {
         const AbstractMetaType* targetType = ov->argType();
@@ -386,16 +394,18 @@ void OverloadData::sortNextOverloads()
     if (unmappedResult.isEmpty()) {
         QString funcName = referenceFunction()->name();
         if (referenceFunction()->ownerClass())
-            funcName.prepend(referenceFunction()->ownerClass()->name() + '.');
+            funcName.prepend(referenceFunction()->ownerClass()->name() + QLatin1Char('.'));
 
         // Dump overload graph
-        QString graphName = QDir::tempPath() + '/' + funcName + ".dot";
+        QString graphName = QDir::tempPath() + QLatin1Char('/') + funcName + QLatin1String(".dot");
         QHash<QString, int>::const_iterator it = sortData.map.begin();
         QHash<int, QString> nodeNames;
         for (; it != sortData.map.end(); ++it)
             nodeNames.insert(it.value(), it.key());
         graph.dumpDot(nodeNames, graphName);
-        ReportHandler::warning(QString("Cyclic dependency found on overloaddata for '%1' method! The graph boy saved the graph at %2.").arg(qPrintable(funcName)).arg(qPrintable(graphName)));
+        qCWarning(lcShiboken).noquote().nospace()
+            << QStringLiteral("Cyclic dependency found on overloaddata for '%1' method! The graph boy saved the graph at %2.")
+                              .arg(funcName, graphName);
     }
 
     m_nextOverloadData.clear();
@@ -529,7 +539,7 @@ QStringList OverloadData::returnTypes() const
         else if (func->type() && !func->argumentRemoved(0))
             retTypes << func->type()->cppSignature();
         else
-            retTypes << "void";
+            retTypes << QLatin1String("void");
     }
     return QStringList(retTypes.toList());
 }
@@ -537,7 +547,7 @@ QStringList OverloadData::returnTypes() const
 bool OverloadData::hasNonVoidReturnType() const
 {
     QStringList retTypes = returnTypes();
-    return !retTypes.contains("void") || retTypes.size() > 1;
+    return !retTypes.contains(QLatin1String("void")) || retTypes.size() > 1;
 }
 
 bool OverloadData::hasVarargs() const
@@ -687,10 +697,10 @@ QList<const AbstractMetaFunction*> OverloadData::overloadsWithoutRepetition() co
 {
     QList<const AbstractMetaFunction*> overloads = m_overloads;
     foreach (const AbstractMetaFunction* func, m_overloads) {
-        if (func->minimalSignature().endsWith("const"))
+        if (func->minimalSignature().endsWith(QLatin1String("const")))
             continue;
         foreach (const AbstractMetaFunction* f, overloads) {
-            if ((func->minimalSignature() + "const") == f->minimalSignature()) {
+            if ((func->minimalSignature() + QLatin1String("const")) == f->minimalSignature()) {
                 overloads.removeOne(f);
                 break;
             }
@@ -802,9 +812,17 @@ void OverloadData::dumpGraph(QString filename) const
     }
 }
 
+static inline QString toHtml(QString s)
+{
+    s.replace(QLatin1Char('<'), QLatin1String("&lt;"));
+    s.replace(QLatin1Char('>'), QLatin1String("&gt;"));
+    s.replace(QLatin1Char('&'), QLatin1String("&amp;"));
+    return s;
+}
+
 QString OverloadData::dumpGraph() const
 {
-    QString indent(4, ' ');
+    QString indent(4, QLatin1Char(' '));
     QString result;
     QTextStream s(&result);
     if (m_argPos == -1) {
@@ -817,10 +835,10 @@ QString OverloadData::dumpGraph() const
         foreach (const AbstractMetaFunction* func, overloads()) {
             s << "f" << functionNumber(func) << " : ";
             if (func->type())
-                s << func->type()->cppSignature().replace('<', "&lt;").replace('>', "&gt;");
+                s << toHtml(func->type()->cppSignature());
             else
                 s << "void";
-            s << ' ' << func->minimalSignature().replace('<', "&lt;").replace('>', "&gt;") << "\\l";
+            s << ' ' << toHtml(func->minimalSignature()) << "\\l";
         }
         s << "\"];" << endl;
 
@@ -830,7 +848,7 @@ QString OverloadData::dumpGraph() const
         s << "<tr><td bgcolor=\"black\" align=\"center\" cellpadding=\"6\" colspan=\"2\"><font color=\"white\">";
         if (rfunc->ownerClass())
             s << rfunc->ownerClass()->name() << "::";
-        s << rfunc->name().replace('<', "&lt;").replace('>', "&gt;") << "</font>";
+        s << toHtml(rfunc->name()) << "</font>";
         if (rfunc->isVirtual()) {
             s << "<br/><font color=\"white\" point-size=\"10\">&lt;&lt;";
             if (rfunc->isAbstract())
@@ -842,7 +860,7 @@ QString OverloadData::dumpGraph() const
         // Function return type
         s << "<tr><td bgcolor=\"gray\" align=\"right\">original type</td><td bgcolor=\"gray\" align=\"left\">";
         if (rfunc->type())
-            s << rfunc->type()->cppSignature().replace('<', "&lt;").replace('>', "&gt;");
+            s << toHtml(rfunc->type()->cppSignature());
         else
             s << "void";
         s << "</td></tr>";
@@ -853,7 +871,7 @@ QString OverloadData::dumpGraph() const
                 continue;
             s << "<tr><td bgcolor=\"gray\" align=\"right\">f" << functionNumber(func);
             s << "-type</td><td bgcolor=\"gray\" align=\"left\">";
-            s << func->typeReplaced(0).replace('<', "&lt;").replace('>', "&gt;") << "</td></tr>";
+            s << toHtml(func->typeReplaced(0)) << "</td></tr>";
         }
 
         // Minimum and maximum number of arguments
@@ -882,7 +900,7 @@ QString OverloadData::dumpGraph() const
 
         s << "}" << endl;
     } else {
-        QString argId = QString("arg_%1").arg((ulong)this);
+        QString argId = QLatin1String("arg_") + QString::number(quintptr(this));
         s << argId << ';' << endl;
 
         s << indent << '"' << argId << "\" [shape=\"plaintext\" style=\"filled,bold\" margin=\"0\" fontname=\"freemono\" fillcolor=\"white\" penwidth=1 ";
@@ -895,10 +913,10 @@ QString OverloadData::dumpGraph() const
         // Argument type information
         QString type = hasArgumentTypeReplace() ? argumentTypeReplaced() : argType()->cppSignature();
         s << "<tr><td bgcolor=\"gray\" align=\"right\">type</td><td bgcolor=\"gray\" align=\"left\">";
-        s << type.replace("&", "&amp;") << "</td></tr>";
+        s << toHtml(type) << "</td></tr>";
         if (hasArgumentTypeReplace()) {
             s << "<tr><td bgcolor=\"gray\" align=\"right\">orig. type</td><td bgcolor=\"gray\" align=\"left\">";
-            s << argType()->cppSignature().replace("&", "&amp;") << "</td></tr>";
+            s << toHtml(argType()->cppSignature()) << "</td></tr>";
         }
 
         // Overloads for the signature to present point

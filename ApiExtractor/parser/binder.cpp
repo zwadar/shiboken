@@ -1,26 +1,31 @@
-/*
- * This file is part of the API Extractor project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- * Copyright (C) 2002-2005 Roberto Raggi <roberto@kdevelop.org>
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2002-2005 Roberto Raggi <roberto@kdevelop.org>
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "binder.h"
 #include "lexer.h"
@@ -45,13 +50,13 @@ Binder::Binder(CodeModel *__model, LocationManager &__location, Control *__contr
         name_cc(this),
         decl_cc(this)
 {
-    _M_qualified_types["char"] = QString();
-    _M_qualified_types["double"] = QString();
-    _M_qualified_types["float"] = QString();
-    _M_qualified_types["int"] = QString();
-    _M_qualified_types["long"] = QString();
-    _M_qualified_types["short"] = QString();
-    _M_qualified_types["void"] = QString();
+    _M_qualified_types.insert(QLatin1String("char"), QString());
+    _M_qualified_types.insert(QLatin1String("double"), QString());
+    _M_qualified_types.insert(QLatin1String("float"), QString());
+    _M_qualified_types.insert(QLatin1String("int"), QString());
+    _M_qualified_types.insert(QLatin1String("long"), QString());
+    _M_qualified_types.insert(QLatin1String("short"), QString());
+    _M_qualified_types.insert(QLatin1String("void"), QString());
 }
 
 Binder::~Binder()
@@ -267,7 +272,7 @@ void Binder::declare_symbol(SimpleDeclarationAST *node, InitDeclaratorAST *init_
         fun->setVariadics(decl_cc.isVariadics());
 
         // ... and the signature
-        foreach (DeclaratorCompiler::Parameter p, decl_cc.parameters()) {
+        foreach (const DeclaratorCompiler::Parameter &p, decl_cc.parameters()) {
             ArgumentModelItem arg = model()->create<ArgumentModelItem>();
             arg->setType(qualifyType(p.type, _M_context));
             arg->setName(p.name);
@@ -293,7 +298,7 @@ void Binder::declare_symbol(SimpleDeclarationAST *node, InitDeclaratorAST *init_
             && init_declarator->declarator->parameter_declaration_clause) {
             typeInfo.setFunctionPointer(true);
             decl_cc.run(init_declarator->declarator);
-            foreach (DeclaratorCompiler::Parameter p, decl_cc.parameters())
+            foreach (const DeclaratorCompiler::Parameter &p, decl_cc.parameters())
             typeInfo.addArgument(p.type);
         }
 
@@ -369,7 +374,7 @@ void Binder::visitFunctionDefinition(FunctionDefinitionAST *node)
 
     _M_current_function->setVariadics(decl_cc.isVariadics());
 
-    foreach (DeclaratorCompiler::Parameter p, decl_cc.parameters()) {
+    foreach (const DeclaratorCompiler::Parameter &p, decl_cc.parameters()) {
         ArgumentModelItem arg = model()->create<ArgumentModelItem>();
         arg->setType(qualifyType(p.type, functionScope->qualifiedName()));
         arg->setName(p.name);
@@ -513,7 +518,7 @@ void Binder::visitTypedef(TypedefAST *node)
             && init_declarator->declarator->parameter_declaration_clause) {
             typeInfo.setFunctionPointer(true);
             decl_cc.run(init_declarator->declarator);
-            foreach (DeclaratorCompiler::Parameter p, decl_cc.parameters())
+            foreach (const DeclaratorCompiler::Parameter &p, decl_cc.parameters())
                 typeInfo.addArgument(p.type);
         }
 
@@ -527,7 +532,7 @@ void Binder::visitTypedef(TypedefAST *node)
         typeAlias->setName(alias_name);
         typeAlias->setType(qualifyType(typeInfo, currentScope()->qualifiedName()));
         typeAlias->setScope(typedefScope->qualifiedName());
-        _M_qualified_types[typeAlias->qualifiedName().join(".")] = QString();
+        _M_qualified_types[typeAlias->qualifiedName().join(QLatin1Char('.'))] = QString();
         currentScope()->addTypeAlias(typeAlias);
     } while (it != end);
 }
@@ -580,7 +585,7 @@ void Binder::visitForwardDeclarationSpecifier(ForwardDeclarationSpecifierAST *no
         return;
 
     ScopeModelItem scope = currentScope();
-    _M_qualified_types[(scope->qualifiedName() + name_cc.qualifiedName()).join(".")] = QString();
+    _M_qualified_types[(scope->qualifiedName() + name_cc.qualifiedName()).join(QLatin1Char('.'))] = QString();
 }
 
 void Binder::visitClassSpecifier(ClassSpecifierAST *node)
@@ -604,8 +609,8 @@ void Binder::visitClassSpecifier(ClassSpecifierAST *node)
     QStringList baseClasses = class_cc.baseClasses();
     TypeInfo info;
     for (int i = 0; i < baseClasses.size(); ++i) {
-        info.setQualifiedName(baseClasses.at(i).split("::"));
-        baseClasses[i] = qualifyType(info, scope->qualifiedName()).qualifiedName().join("::");
+        info.setQualifiedName(baseClasses.at(i).split(QLatin1String("::")));
+        baseClasses[i] = qualifyType(info, scope->qualifiedName()).qualifiedName().join(QLatin1String("::"));
     }
 
     _M_current_class->setBaseClasses(baseClasses);
@@ -614,15 +619,15 @@ void Binder::visitClassSpecifier(ClassSpecifierAST *node)
 
     if (!_M_current_template_parameters.isEmpty()) {
         QString name = _M_current_class->name();
-        name += "<";
+        name += QLatin1Char('<');
         for (int i = 0; i < _M_current_template_parameters.size(); ++i) {
             if (i > 0)
-                name += ",";
+                name += QLatin1Char(',');
 
             name += _M_current_template_parameters.at(i)->name();
         }
 
-        name += ">";
+        name += QLatin1Char('>');
         _M_current_class->setName(name);
     }
 
@@ -630,7 +635,7 @@ void Binder::visitClassSpecifier(ClassSpecifierAST *node)
     CodeModel::FunctionType oldFunctionType = changeCurrentFunctionType(CodeModel::Normal);
 
     _M_current_class->setScope(scope->qualifiedName());
-    _M_qualified_types[_M_current_class->qualifiedName().join(".")] = QString();
+    _M_qualified_types[_M_current_class->qualifiedName().join(QLatin1Char('.'))] = QString();
 
     scope->addClass(_M_current_class);
 
@@ -666,7 +671,7 @@ void Binder::visitEnumSpecifier(EnumSpecifierAST *node)
     bool isAnonymous = name.isEmpty();
     if (isAnonymous) {
         // anonymous enum
-        QString key = _M_context.join("::");
+        QString key = _M_context.join(QLatin1String("::"));
         int current = ++_M_anonymous_enums[key];
         name += QLatin1String("enum_");
         name += QString::number(current);
@@ -679,7 +684,7 @@ void Binder::visitEnumSpecifier(EnumSpecifierAST *node)
     _M_current_enum->setAnonymous(isAnonymous);
     _M_current_enum->setScope(enumScope->qualifiedName());
 
-    _M_qualified_types[_M_current_enum->qualifiedName().join(".")] = QString();
+    _M_qualified_types[_M_current_enum->qualifiedName().join(QLatin1Char('.'))] = QString();
 
     enumScope->addEnum(_M_current_enum);
 
@@ -690,10 +695,10 @@ void Binder::visitEnumSpecifier(EnumSpecifierAST *node)
 
 static QString strip_preprocessor_lines(const QString &name)
 {
-    QStringList lst = name.split("\n");
+    QStringList lst = name.split(QLatin1Char('\n'));
     QString s;
     for (int i = 0; i < lst.size(); ++i) {
-        if (!lst.at(i).startsWith('#'))
+        if (!lst.at(i).startsWith(QLatin1Char('#')))
             s += lst.at(i);
     }
     return s.trimmed();
@@ -709,9 +714,11 @@ void Binder::visitEnumerator(EnumeratorAST *node)
     if (ExpressionAST *expr = node->expression) {
         const Token &start_token = _M_token_stream->token((int) expr->start_token);
         const Token &end_token = _M_token_stream->token((int) expr->end_token);
-
-        e->setValue(strip_preprocessor_lines(QString::fromUtf8(&start_token.text[start_token.position],
-                                                               (int)(end_token.position - start_token.position)).trimmed()).remove(' '));
+        const QString token = QString::fromUtf8(&start_token.text[start_token.position],
+                                                (int)(end_token.position - start_token.position));
+        QString lines = strip_preprocessor_lines(token.trimmed());
+        lines.remove(QLatin1Char(' '));
+        e->setValue(lines);
     }
 
     _M_current_enum->addEnumerator(e);
@@ -727,7 +734,7 @@ void Binder::visitQEnums(QEnumsAST *node)
     const Token &start = _M_token_stream->token((int) node->start_token);
     const Token &end = _M_token_stream->token((int) node->end_token);
     QStringList enum_list = QString::fromLatin1(start.text + start.position,
-                                                end.position - start.position).split(' ');
+                                                end.position - start.position).split(QLatin1Char(' '));
 
     ScopeModelItem scope = currentScope();
     for (int i = 0; i < enum_list.size(); ++i)
@@ -818,12 +825,12 @@ TypeInfo Binder::qualifyType(const TypeInfo &type, const QStringList &context) c
     if (!context.size()) {
         // ### We can assume that this means global namespace for now...
         return type;
-    } else if (_M_qualified_types.contains(type.qualifiedName().join("."))) {
+    } else if (_M_qualified_types.contains(type.qualifiedName().join(QLatin1Char('.')))) {
         return type;
     } else {
         QStringList expanded = context;
         expanded << type.qualifiedName();
-        if (_M_qualified_types.contains(expanded.join("."))) {
+        if (_M_qualified_types.contains(expanded.join(QLatin1Char('.')))) {
             TypeInfo modified_type = type;
             modified_type.setQualifiedName(expanded);
             return modified_type;
@@ -831,7 +838,7 @@ TypeInfo Binder::qualifyType(const TypeInfo &type, const QStringList &context) c
             CodeModelItem scope = model()->findItem(context, _M_current_file->toItem());
 
             if (ClassModelItem klass = model_dynamic_cast<ClassModelItem> (scope)) {
-                foreach (QString base, klass->baseClasses()) {
+                foreach (const QString &base, klass->baseClasses()) {
                     QStringList ctx = context;
                     ctx.removeLast();
                     ctx.append(base);

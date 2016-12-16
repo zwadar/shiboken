@@ -1,25 +1,30 @@
-/*
-* This file is part of the API Extractor project.
-*
-* Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
-*
-* Contact: PySide team <contact@pyside.org>
-*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* version 2 as published by the Free Software Foundation.
-*
-* This program is distributed in the hope that it will be useful, but
-* WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-* General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA
-*
-*/
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of the test suite of PySide2.
+**
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #include "testmodifyfunction.h"
 #include <QtTest/QTest>
@@ -45,11 +50,11 @@ void TestModifyFunction::testRenameArgument()
     </typesystem>";
     TestUtil t(cppCode, xmlCode, false);
     AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass("A");
-    const AbstractMetaFunction* func = classA->findFunction("method");
+    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    const AbstractMetaFunction* func = classA->findFunction(QLatin1String("method"));
     Q_ASSERT(func);
 
-    QCOMPARE(func->argumentName(1), QString("otherArg"));
+    QCOMPARE(func->argumentName(1), QLatin1String("otherArg"));
 }
 
 void TestModifyFunction::testOwnershipTransfer()
@@ -73,8 +78,8 @@ void TestModifyFunction::testOwnershipTransfer()
     </typesystem>";
     TestUtil t(cppCode, xmlCode, false);
     AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classB = classes.findClass("B");
-    const AbstractMetaFunction* func = classB->findFunction("method");
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    const AbstractMetaFunction* func = classB->findFunction(QLatin1String("method"));
 
     QCOMPARE(func->ownership(func->ownerClass(), TypeSystem::TargetLangCode, 0), TypeSystem::CppOwnership);
 }
@@ -120,45 +125,45 @@ void TestModifyFunction::invalidateAfterUse()
     </typesystem>";
     TestUtil t(cppCode, xmlCode, false, "0.1");
     AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classB = classes.findClass("B");
-    const AbstractMetaFunction* func = classB->findFunction("call");
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    const AbstractMetaFunction* func = classB->findFunction(QLatin1String("call"));
     QCOMPARE(func->modifications().size(), 1);
     QCOMPARE(func->modifications().at(0).argument_mods.size(), 1);
     QVERIFY(func->modifications().at(0).argument_mods.at(0).resetAfterUse);
 
-    AbstractMetaClass* classC = classes.findClass("C");
+    AbstractMetaClass* classC = classes.findClass(QLatin1String("C"));
     QVERIFY(classC);
-    func = classC->findFunction("call");
+    func = classC->findFunction(QLatin1String("call"));
     QCOMPARE(func->modifications().size(), 1);
     QCOMPARE(func->modifications().at(0).argument_mods.size(), 1);
     QVERIFY(func->modifications().at(0).argument_mods.at(0).resetAfterUse);
 
-    func = classC->findFunction("call2");
+    func = classC->findFunction(QLatin1String("call2"));
     QCOMPARE(func->modifications().size(), 1);
     QCOMPARE(func->modifications().at(0).argument_mods.size(), 1);
     QVERIFY(func->modifications().at(0).argument_mods.at(0).resetAfterUse);
 
-    AbstractMetaClass* classD =  classes.findClass("D");
+    AbstractMetaClass* classD =  classes.findClass(QLatin1String("D"));
     QVERIFY(classD);
-    func = classD->findFunction("call");
+    func = classD->findFunction(QLatin1String("call"));
     QCOMPARE(func->modifications().size(), 1);
     QCOMPARE(func->modifications().at(0).argument_mods.size(), 1);
     QVERIFY(func->modifications().at(0).argument_mods.at(0).resetAfterUse);
 
-    func = classD->findFunction("call2");
+    func = classD->findFunction(QLatin1String("call2"));
     QCOMPARE(func->modifications().size(), 1);
     QCOMPARE(func->modifications().at(0).argument_mods.size(), 1);
     QVERIFY(func->modifications().at(0).argument_mods.at(0).resetAfterUse);
 
-    AbstractMetaClass* classE = classes.findClass("E");
+    AbstractMetaClass* classE = classes.findClass(QLatin1String("E"));
     QVERIFY(classE);
-    func = classE->findFunction("call");
+    func = classE->findFunction(QLatin1String("call"));
     QVERIFY(func);
     QCOMPARE(func->modifications().size(), 1);
     QCOMPARE(func->modifications().at(0).argument_mods.size(), 1);
     QVERIFY(func->modifications().at(0).argument_mods.at(0).resetAfterUse);
 
-    func = classE->findFunction("call2");
+    func = classE->findFunction(QLatin1String("call2"));
     QVERIFY(func);
     QCOMPARE(func->modifications().size(), 1);
     QCOMPARE(func->modifications().at(0).argument_mods.size(), 1);
@@ -192,12 +197,12 @@ void TestModifyFunction::testWithApiVersion()
     </typesystem>";
     TestUtil t(cppCode, xmlCode, false, "0.1");
     AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classB = classes.findClass("B");
-    const AbstractMetaFunction* func = classB->findFunction("method");
+    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    const AbstractMetaFunction* func = classB->findFunction(QLatin1String("method"));
 
     QCOMPARE(func->ownership(func->ownerClass(), TypeSystem::TargetLangCode, 0), TypeSystem::CppOwnership);
 
-    func = classB->findFunction("methodB");
+    func = classB->findFunction(QLatin1String("methodB"));
     QVERIFY(func->ownership(func->ownerClass(), TypeSystem::TargetLangCode, 0) != TypeSystem::CppOwnership);
 }
 
@@ -223,22 +228,20 @@ void TestModifyFunction::testGlobalFunctionModification()
     TestUtil t(cppCode, xmlCode, false);
     QCOMPARE(t.builder()->globalFunctions().size(), 1);
 
-    FunctionModificationList mods = TypeDatabase::instance()->functionModifications("function(A*)");
+    FunctionModificationList mods = TypeDatabase::instance()->functionModifications(QLatin1String("function(A*)"));
     QCOMPARE(mods.count(), 1);
     QList<ArgumentModification> argMods = mods.first().argument_mods;
     QCOMPARE(argMods.count(), 1);
     ArgumentModification argMod = argMods.first();
-    QCOMPARE(argMod.replacedDefaultExpression, QString("A()"));
+    QCOMPARE(argMod.replacedDefaultExpression, QLatin1String("A()"));
 
     const AbstractMetaFunction* func = t.builder()->globalFunctions().first();
     QVERIFY(func);
     QCOMPARE(func->arguments().count(), 1);
     const AbstractMetaArgument* arg = func->arguments().first();
-    QCOMPARE(arg->type()->cppSignature(), QString("A *"));
-    QCOMPARE(arg->originalDefaultValueExpression(), QString("0"));
-    QCOMPARE(arg->defaultValueExpression(), QString("A()"));
+    QCOMPARE(arg->type()->cppSignature(), QLatin1String("A *"));
+    QCOMPARE(arg->originalDefaultValueExpression(), QLatin1String("0"));
+    QCOMPARE(arg->defaultValueExpression(), QLatin1String("A()"));
 }
 
 QTEST_APPLESS_MAIN(TestModifyFunction)
-
-#include "testmodifyfunction.moc"

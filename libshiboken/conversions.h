@@ -1,24 +1,41 @@
-/*
- * This file is part of the Shiboken Python Bindings Generator project.
- *
- * Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
- *
- * Contact: PySide team <contact@pyside.org>
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
- */
+/****************************************************************************
+**
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
+**
+** This file is part of PySide2.
+**
+** $QT_BEGIN_LICENSE:LGPL$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
+**
+** $QT_END_LICENSE$
+**
+****************************************************************************/
 
 #ifndef CONVERSIONS_H
 #define CONVERSIONS_H
@@ -141,8 +158,8 @@ struct Converter<T&>
 template<>
 struct Converter<void*>
 {
-    static inline bool checkType(PyObject* pyObj) { return false; }
-    static inline bool isConvertible(PyObject* pyobj) { return true; }
+    static inline bool checkType(PyObject *) { return false; }
+    static inline bool isConvertible(PyObject *) { return true; }
     static PyObject* toPython(void* cppobj)
     {
         if (!cppobj)
@@ -291,7 +308,7 @@ struct OverFlowChecker<T, false>
 template<>
 struct OverFlowChecker<PY_LONG_LONG, true>
 {
-    static bool check(const PY_LONG_LONG& value)
+    static bool check(const PY_LONG_LONG &)
     {
         return false;
     }
@@ -300,7 +317,7 @@ struct OverFlowChecker<PY_LONG_LONG, true>
 template<>
 struct OverFlowChecker<double, true>
 {
-    static bool check(const double& value)
+    static bool check(const double &)
     {
         return false;
     }
@@ -399,7 +416,7 @@ template <> struct Converter<char> : CharConverter<char>
             PY_LONG_LONG result = PyInt_AsUnsignedLongLongMask(pyobj);
             if (OverFlowChecker<char>::check(result))
                 PyErr_SetObject(PyExc_OverflowError, 0);
-            return result;
+            return char(result);
         } else if (Shiboken::String::check(pyobj)) {
             return Shiboken::String::toCString(pyobj)[0];
         } else {
