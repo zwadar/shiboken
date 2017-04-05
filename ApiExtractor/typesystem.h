@@ -29,12 +29,15 @@
 #ifndef TYPESYSTEM_H
 #define TYPESYSTEM_H
 
+#include "typesystem_enums.h"
+#include "typesystem_typedefs.h"
+#include "include.h"
+
 #include <QtCore/QHash>
+#include <QtCore/qobjectdefs.h>
 #include <QtCore/QString>
 #include <QtCore/QStringList>
 #include <QtCore/QMap>
-#include <QtCore/QDebug>
-#include "include.h"
 
 //Used to identify the conversion rule to avoid break API
 #define TARGET_CONVERSION_RULE_FLAG "0"
@@ -53,40 +56,6 @@ class FlagsTypeEntry;
 typedef QMap<int, QString> ArgumentMap;
 
 class TemplateInstance;
-
-namespace TypeSystem
-{
-enum Language {
-    NoLanguage          = 0x0000,
-    TargetLangCode      = 0x0001,
-    NativeCode          = 0x0002,
-    ShellCode           = 0x0004,
-    ShellDeclaration    = 0x0008,
-    PackageInitializer  = 0x0010,
-    DestructorFunction  = 0x0020,
-    Constructors        = 0x0040,
-    Interface           = 0x0080,
-
-    // masks
-    All                 = TargetLangCode
-    | NativeCode
-    | ShellCode
-    | ShellDeclaration
-    | PackageInitializer
-    | Constructors
-    | Interface
-    | DestructorFunction,
-
-    TargetLangAndNativeCode   = TargetLangCode | NativeCode
-};
-
-enum Ownership {
-    InvalidOwnership,
-    DefaultOwnership,
-    TargetLangOwnership,
-    CppOwnership
-};
-};
 
 struct ReferenceCount
 {
@@ -149,10 +118,8 @@ class CodeSnipAbstract
 public:
     QString code() const;
 
-    void addCode(const QString &code)
-    {
-        codeList.append(CodeSnipFragment(code));
-    }
+    void addCode(const QString &code) { codeList.append(CodeSnipFragment(code)); }
+    void addCode(const QStringRef &code) { addCode(code.toString()); }
 
     void addTemplateInstance(TemplateInstance *ti)
     {
@@ -194,8 +161,6 @@ private:
     double m_version;
 };
 
-typedef QHash<QString, TemplateEntry *> TemplateEntryHash;
-
 class TemplateInstance
 {
 public:
@@ -229,27 +194,14 @@ private:
 class CodeSnip : public CodeSnipAbstract
 {
 public:
-    enum Position {
-        Beginning,
-        End,
-        AfterThis,
-        // QtScript
-        Declaration,
-        PrototypeInitialization,
-        ConstructorInitialization,
-        Constructor,
-        Any
-    };
-
     CodeSnip(double vr) : language(TypeSystem::TargetLangCode), version(vr) { }
     CodeSnip(double vr, TypeSystem::Language lang) : language(lang), version(vr) { }
 
     TypeSystem::Language language;
-    Position position;
+    TypeSystem::CodeSnipPosition position;
     ArgumentMap argumentMap;
     double version;
 };
-typedef QList<CodeSnip> CodeSnipList;
 
 struct ArgumentModification
 {
@@ -440,7 +392,6 @@ private:
 
 
 };
-typedef QList<FunctionModification> FunctionModificationList;
 
 struct FieldModification: public Modification
 {
@@ -455,8 +406,6 @@ struct FieldModification: public Modification
 
     QString name;
 };
-
-typedef QList<FieldModification> FieldModificationList;
 
 /**
 *   \internal
@@ -553,7 +502,11 @@ private:
     bool m_isStatic;
     double m_version;
 };
-typedef QList<AddedFunction> AddedFunctionList;
+
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const AddedFunction::TypeInfo &ti);
+QDebug operator<<(QDebug d, const AddedFunction &af);
+#endif
 
 struct ExpensePolicy
 {
@@ -572,23 +525,15 @@ class ObjectTypeEntry;
 class DocModification
 {
 public:
-    enum Mode {
-        Append,
-        Prepend,
-        Replace,
-        XPathReplace
-    };
-
     DocModification(const QString& xpath, const QString& signature, double vr)
-            : format(TypeSystem::NativeCode), m_mode(XPathReplace),
+            : format(TypeSystem::NativeCode), m_mode(TypeSystem::DocModificationXPathReplace),
               m_xpath(xpath), m_signature(signature), m_version(vr) {}
-    DocModification(Mode mode, const QString& signature, double vr)
+    DocModification(TypeSystem::DocModificationMode mode, const QString& signature, double vr)
             : m_mode(mode), m_signature(signature), m_version(vr) {}
 
-    void setCode(const QString& code)
-    {
-        m_code = code;
-    }
+    void setCode(const QString& code) { m_code = code; }
+    void setCode(const QStringRef& code) { m_code = code.toString(); }
+
     QString code() const
     {
         return m_code;
@@ -601,7 +546,7 @@ public:
     {
         return m_signature;
     }
-    Mode mode() const
+    TypeSystem::DocModificationMode mode() const
     {
         return m_mode;
     }
@@ -613,19 +558,18 @@ public:
     TypeSystem::Language format;
 
 private:
-    Mode m_mode;
+    TypeSystem::DocModificationMode m_mode;
     QString m_code;
     QString m_xpath;
     QString m_signature;
     double m_version;
 };
 
-typedef QList<DocModification> DocModificationList;
-
 class CustomConversion;
 
 class TypeEntry
 {
+    Q_GADGET
 public:
     enum Type {
         PrimitiveType,
@@ -649,8 +593,10 @@ public:
         TypeSystemType,
         CustomType,
         TargetLangType,
-        FunctionType
+        FunctionType,
+        SmartPointerType
     };
+    Q_ENUM(Type)
 
     enum CodeGeneration {
         GenerateTargetLang      = 0x0001,
@@ -661,6 +607,7 @@ public:
         GenerateAll             = 0xffff,
         GenerateCode            = GenerateTargetLang | GenerateCpp
     };
+    Q_ENUM(CodeGeneration)
 
     TypeEntry(const QString &name, Type t, double vr)
             : m_name(name),
@@ -713,6 +660,10 @@ public:
     bool isContainer() const
     {
         return m_type == ContainerType;
+    }
+    bool isSmartPointer() const
+    {
+        return m_type == SmartPointerType;
     }
     bool isVariant() const
     {
@@ -992,9 +943,6 @@ private:
     bool m_stream;
     double m_version;
 };
-typedef QHash<QString, QList<TypeEntry *> > TypeEntryHash;
-typedef QHash<QString, TypeEntry *> SingleTypeEntryHash;
-
 
 class TypeSystemTypeEntry : public TypeEntry
 {
@@ -1080,7 +1028,7 @@ public:
             : TypeEntry(name, PrimitiveType, vr),
               m_preferredConversion(true),
               m_preferredTargetLangType(true),
-              m_aliasedTypeEntry(0)
+              m_referencedTypeEntry(0)
     {
     }
 
@@ -1117,28 +1065,28 @@ public:
 
     /**
      *   The PrimitiveTypeEntry pointed by this type entry if it
-     *   represents an alias (i.e. a typedef).
-     *   /return the type pointed by the alias, or a null pointer
-     *   if the current object is not an alias
+     *   represents a typedef).
+     *   /return the type referenced by the typedef, or a null pointer
+     *   if the current object is not an typedef
      */
-    PrimitiveTypeEntry* aliasedTypeEntry() const { return m_aliasedTypeEntry; }
+    PrimitiveTypeEntry* referencedTypeEntry() const { return m_referencedTypeEntry; }
 
     /**
-     *   Defines type aliased by this entry.
-     *   /param aliasedTypeEntry type aliased by this entry
+     *   Defines type referenced by this entry.
+     *   /param referencedTypeEntry type referenced by this entry
      */
-    void setAliasedTypeEntry(PrimitiveTypeEntry* aliasedTypeEntry)
+    void setReferencedTypeEntry(PrimitiveTypeEntry* referencedTypeEntry)
     {
-        m_aliasedTypeEntry = aliasedTypeEntry;
+        m_referencedTypeEntry = referencedTypeEntry;
     }
 
     /**
      *   Finds the most basic primitive type that the typedef represents,
-     *   i.e. a type that is not an alias.
-     *   /return the most basic non-aliased primitive type represented
+     *   i.e. a type that is not an typedef'ed.
+     *   /return the most basic non-typedef'ed primitive type represented
      *   by this typedef
      */
-    PrimitiveTypeEntry* basicAliasedTypeEntry() const;
+    PrimitiveTypeEntry* basicReferencedTypeEntry() const;
 
     virtual bool preferredConversion() const
     {
@@ -1166,10 +1114,8 @@ private:
     QString m_defaultConstructor;
     uint m_preferredConversion : 1;
     uint m_preferredTargetLangType : 1;
-    PrimitiveTypeEntry* m_aliasedTypeEntry;
+    PrimitiveTypeEntry* m_referencedTypeEntry;
 };
-
-typedef QList<const PrimitiveTypeEntry*> PrimitiveTypeEntryList;
 
 struct EnumValueRedirection
 {
@@ -1680,6 +1626,7 @@ private:
 
 class ContainerTypeEntry : public ComplexTypeEntry
 {
+    Q_GADGET
 public:
     enum Type {
         NoContainer,
@@ -1696,6 +1643,7 @@ public:
         MultiHashContainer,
         PairContainer,
     };
+    Q_ENUM(Type)
 
     ContainerTypeEntry(const QString &name, Type type, double vr)
         : ComplexTypeEntry(name, ContainerType, vr), m_type(type)
@@ -1737,7 +1685,36 @@ private:
     Type m_type;
 };
 
-typedef QList<const ContainerTypeEntry*> ContainerTypeEntryList;
+class SmartPointerTypeEntry : public ComplexTypeEntry
+{
+public:
+    SmartPointerTypeEntry(const QString &name,
+                          const QString &getterName,
+                          const QString &smartPointerType,
+                          const QString &refCountMethodName,
+                          double vr)
+        : ComplexTypeEntry(name, SmartPointerType, vr),
+          m_getterName(getterName),
+          m_smartPointerType(smartPointerType),
+          m_refCountMethodName(refCountMethodName)
+    {
+    }
+
+    QString getter() const
+    {
+        return m_getterName;
+    }
+
+    QString refCountMethodName() const
+    {
+        return m_refCountMethodName;
+    }
+
+private:
+    QString m_getterName;
+    QString m_smartPointerType;
+    QString m_refCountMethodName;
+};
 
 class NamespaceTypeEntry : public ComplexTypeEntry
 {

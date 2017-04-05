@@ -29,39 +29,40 @@
 #include "testdroptypeentries.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 static const char* cppCode ="\
-    struct ValueA {};\
-    struct ValueB {};\
-    struct ObjectA {};\
-    struct ObjectB {};\
-    namespace NamespaceA {\
-        struct InnerClassA {};\
-        namespace InnerNamespaceA {}\
-    }\
-    namespace NamespaceB {}\
-    enum EnumA { Value0 };\
-    enum EnumB { Value1 };\
-    void funcA();\
-    void funcB();\
-";
+    struct ValueA {};\n\
+    struct ValueB {};\n\
+    struct ObjectA {};\n\
+    struct ObjectB {};\n\
+    namespace NamespaceA {\n\
+        struct InnerClassA {};\n\
+        namespace InnerNamespaceA {}\n\
+    }\n\
+    namespace NamespaceB {}\n\
+    enum EnumA { Value0 };\n\
+    enum EnumB { Value1 };\n\
+    void funcA();\n\
+    void funcB();\n";
 
 static const char* xmlCode = "\
-<typesystem package='Foo'>\
-    <value-type name='ValueA' />\
-    <value-type name='ValueB' />\
-    <object-type name='ObjectA' />\
-    <object-type name='ObjectB' />\
-    <namespace-type name='NamespaceA'>\
-        <value-type name='InnerClassA' />\
-        <namespace-type name='InnerNamespaceA' />\
-    </namespace-type>\
-    <namespace-type name='NamespaceB' />\
-    <enum-type name='EnumA' />\
-    <enum-type name='EnumB' />\
-    <function signature='funcA()' />\
-    <function signature='funcB()' />\
-</typesystem>";
+<typesystem package='Foo'>\n\
+    <value-type name='ValueA'/>\n\
+    <value-type name='ValueB'/>\n\
+    <object-type name='ObjectA'/>\n\
+    <object-type name='ObjectB'/>\n\
+    <namespace-type name='NamespaceA'>\n\
+        <value-type name='InnerClassA'/>\n\
+        <namespace-type name='InnerNamespaceA'/>\n\
+    </namespace-type>\n\
+    <namespace-type name='NamespaceB'/>\n\
+    <enum-type name='EnumA'/>\n\
+    <enum-type name='EnumB'/>\n\
+    <function signature='funcA()'/>\n\
+    <function signature='funcB()'/>\n\
+</typesystem>\n";
 
 void TestDropTypeEntries::testDropEntries()
 {
@@ -69,18 +70,19 @@ void TestDropTypeEntries::testDropEntries()
     droppedEntries << QLatin1String("Foo.ObjectB") << QLatin1String("Foo.NamespaceA.InnerClassA");
     droppedEntries << QLatin1String("Foo.NamespaceB") << QLatin1String("Foo.EnumB") << QLatin1String("Foo.funcB()");
     droppedEntries << QLatin1String("Foo.NamespaceA.InnerNamespaceA");
-    TestUtil t(cppCode, xmlCode, false, 0, droppedEntries);
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false, Q_NULLPTR, droppedEntries));
+    QVERIFY(!builder.isNull());
 
-    AbstractMetaClassList classes = t.builder()->classes();
-    QVERIFY(classes.findClass(QLatin1String("ValueA")));
-    QVERIFY(!classes.findClass(QLatin1String("ValueB")));
-    QVERIFY(classes.findClass(QLatin1String("ObjectA")));
-    QVERIFY(!classes.findClass(QLatin1String("ObjectB")));
-    QVERIFY(classes.findClass(QLatin1String("NamespaceA")));
-    QVERIFY(!classes.findClass(QLatin1String("NamespaceA::InnerClassA")));
-    QVERIFY(!classes.findClass(QLatin1String("NamespaceB")));
+    AbstractMetaClassList classes = builder->classes();
+    QVERIFY(AbstractMetaClass::findClass(classes, QLatin1String("ValueA")));
+    QVERIFY(!AbstractMetaClass::findClass(classes, QLatin1String("ValueB")));
+    QVERIFY(AbstractMetaClass::findClass(classes, QLatin1String("ObjectA")));
+    QVERIFY(!AbstractMetaClass::findClass(classes, QLatin1String("ObjectB")));
+    QVERIFY(AbstractMetaClass::findClass(classes, QLatin1String("NamespaceA")));
+    QVERIFY(!AbstractMetaClass::findClass(classes, QLatin1String("NamespaceA::InnerClassA")));
+    QVERIFY(!AbstractMetaClass::findClass(classes, QLatin1String("NamespaceB")));
 
-    AbstractMetaEnumList globalEnums = t.builder()->globalEnums();
+    AbstractMetaEnumList globalEnums = builder->globalEnums();
     QCOMPARE(globalEnums.count(), 1);
     QCOMPARE(globalEnums.first()->name(), QLatin1String("EnumA"));
 
@@ -91,18 +93,19 @@ void TestDropTypeEntries::testDropEntries()
 
 void TestDropTypeEntries::testDontDropEntries()
 {
-    TestUtil t(cppCode, xmlCode, false);
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
 
-    AbstractMetaClassList classes = t.builder()->classes();
-    QVERIFY(classes.findClass(QLatin1String("ValueA")));
-    QVERIFY(classes.findClass(QLatin1String("ValueB")));
-    QVERIFY(classes.findClass(QLatin1String("ObjectA")));
-    QVERIFY(classes.findClass(QLatin1String("ObjectB")));
-    QVERIFY(classes.findClass(QLatin1String("NamespaceA")));
-    QVERIFY(classes.findClass(QLatin1String("NamespaceA::InnerClassA")));
-    QVERIFY(classes.findClass(QLatin1String("NamespaceB")));
+    AbstractMetaClassList classes = builder->classes();
+    QVERIFY(AbstractMetaClass::findClass(classes, QLatin1String("ValueA")));
+    QVERIFY(AbstractMetaClass::findClass(classes, QLatin1String("ValueB")));
+    QVERIFY(AbstractMetaClass::findClass(classes, QLatin1String("ObjectA")));
+    QVERIFY(AbstractMetaClass::findClass(classes, QLatin1String("ObjectB")));
+    QVERIFY(AbstractMetaClass::findClass(classes, QLatin1String("NamespaceA")));
+    QVERIFY(AbstractMetaClass::findClass(classes, QLatin1String("NamespaceA::InnerClassA")));
+    QVERIFY(AbstractMetaClass::findClass(classes, QLatin1String("NamespaceB")));
 
-    QCOMPARE(t.builder()->globalEnums().size(), 2);
+    QCOMPARE(builder->globalEnums().size(), 2);
 
     TypeDatabase* td = TypeDatabase::instance();
     QVERIFY(td->findType(QLatin1String("funcA")));
@@ -110,31 +113,33 @@ void TestDropTypeEntries::testDontDropEntries()
 }
 
 static const char* cppCode2 ="\
-    struct ValueA {\
-        void func();\
-    };\
-";
+    struct ValueA {\n\
+        void func();\n\
+    };\n";
 
 static const char* xmlCode2 = "\
-<typesystem package='Foo'>\
-    <value-type name='ValueA'>\
-        <modify-function signature='func()'>\
-            <remove class='all' />\
-        </modify-function>\
-    </value-type>\
-</typesystem>";
+<typesystem package='Foo'>\n\
+    <value-type name='ValueA'>\n\
+        <modify-function signature='func()'>\n\
+            <remove class='all'/>\n\
+        </modify-function>\n\
+    </value-type>\n\
+</typesystem>\n";
 
 void TestDropTypeEntries::testDropEntryWithChildTags()
 {
     QStringList droppedEntries(QLatin1String("Foo.ValueA"));
-    TestUtil t(cppCode2, xmlCode2, false, 0, droppedEntries);
-    QVERIFY(!t.builder()->classes().findClass(QLatin1String("ValueA")));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode2, xmlCode2, false, Q_NULLPTR, droppedEntries));
+    QVERIFY(!builder.isNull());
+    QVERIFY(!AbstractMetaClass::findClass(builder->classes(), QLatin1String("ValueA")));
 }
+
 
 void TestDropTypeEntries::testDontDropEntryWithChildTags()
 {
-    TestUtil t(cppCode2, xmlCode2, false);
-    QVERIFY(t.builder()->classes().findClass(QLatin1String("ValueA")));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode2, xmlCode2, false));
+    QVERIFY(!builder.isNull());
+    QVERIFY(AbstractMetaClass::findClass(builder->classes(), QLatin1String("ValueA")));
 }
 
 QTEST_APPLESS_MAIN(TestDropTypeEntries)

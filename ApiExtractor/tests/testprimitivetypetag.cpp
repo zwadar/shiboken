@@ -29,23 +29,25 @@
 #include "testprimitivetypetag.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestPrimitiveTypeTag::testPrimitiveTypeDefaultConstructor()
 {
     const char* cppCode ="\
-    struct A {};\
-    struct B {};\
-    ";
+    struct A {};\n\
+    struct B {};\n";
     const char* xmlCode = "\
-    <typesystem package=\"Foo\"> \
-        <primitive-type name='A' default-constructor='A()'/> \
-        <object-type name='B' /> \
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
+    <typesystem package=\"Foo\">\n\
+        <primitive-type name='A' default-constructor='A()'/>\n\
+        <object-type name='B'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
 
-    AbstractMetaClassList classes = t.builder()->classes();
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.count(), 1);
-    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    const AbstractMetaClass *classB = AbstractMetaClass::findClass(classes, QLatin1String("B"));
     QVERIFY(classB);
 
     PrimitiveTypeEntry* typeEntry = TypeDatabase::instance()->findPrimitiveType(QLatin1String("A"));

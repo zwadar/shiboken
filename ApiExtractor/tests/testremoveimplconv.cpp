@@ -29,35 +29,37 @@
 #include "testremoveimplconv.h"
 #include "testutil.h"
 #include <QtTest/QTest>
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 // When a constructor able to trigger implicity conversions is removed
 // it should not appear in the implicity conversion list.
 void TestRemoveImplConv::testRemoveImplConv()
 {
     const char* cppCode ="\
-    struct A {};\
-    struct B {};\
-    struct C {\
-        C(const A&);\
-        C(const B&);\
-    };\
-    ";
+    struct A {};\n\
+    struct B {};\n\
+    struct C {\n\
+        C(const A&);\n\
+        C(const B&);\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package=\"Foo\"> \
-        <value-type name='A' /> \
-        <value-type name='B' /> \
-        <value-type name='C'> \
-            <modify-function signature='C(const A&amp;)' remove='all' />\
-        </value-type>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode);
-    AbstractMetaClassList classes = t.builder()->classes();
+    <typesystem package=\"Foo\">\n\
+        <value-type name='A'/>\n\
+        <value-type name='B'/>\n\
+        <value-type name='C'>\n\
+            <modify-function signature='C(const A&amp;)' remove='all'/>\n\
+        </value-type>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.count(), 3);
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
-    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    const AbstractMetaClass *classB = AbstractMetaClass::findClass(classes, QLatin1String("B"));
     QVERIFY(classB);
-    AbstractMetaClass* classC = classes.findClass(QLatin1String("C"));
+    const AbstractMetaClass *classC = AbstractMetaClass::findClass(classes, QLatin1String("C"));
     QVERIFY(classC);
     AbstractMetaFunctionList implConv = classC->implicitConversions();
     QCOMPARE(implConv.count(), 1);

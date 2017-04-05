@@ -29,8 +29,10 @@
 #define TYPESYSTEM_P_H
 
 #include <QStack>
-#include <QtXml/QtXml>
 #include "typesystem.h"
+
+QT_FORWARD_DECLARE_CLASS(QXmlStreamAttributes)
+QT_FORWARD_DECLARE_CLASS(QXmlStreamReader)
 
 class TypeDatabase;
 class StackElement
@@ -52,6 +54,7 @@ class StackElement
             ContainerTypeEntry          = 0xa,
             FunctionTypeEntry           = 0xb,
             CustomTypeEntry             = 0xc,
+            SmartPointerTypeEntry       = 0xd,
             TypeEntryMask               = 0xf,
 
             // Documentation tags
@@ -129,32 +132,29 @@ struct StackElementContext
     DocModificationList docModifications;
 };
 
-class Handler : public QXmlDefaultHandler
+class Handler
 {
 public:
     Handler(TypeDatabase* database, bool generate);
 
-    bool startElement(const QString& namespaceURI, const QString& localName,
-                      const QString& qName, const QXmlAttributes& atts);
-    bool endElement(const QString& namespaceURI, const QString& localName, const QString& qName);
-
-    QString errorString() const
-    {
-        return m_error;
-    }
-
-    bool error(const QXmlParseException &exception);
-    bool fatalError(const QXmlParseException &exception);
-    bool warning(const QXmlParseException &exception);
-
-    bool characters(const QString &ch);
+    bool parse(QXmlStreamReader &reader);
 
 private:
-    void fetchAttributeValues(const QString &name, const QXmlAttributes &atts,
+    bool startElement(const QStringRef& localName, const QXmlStreamAttributes& atts);
+    bool handleSmartPointerEntry(StackElement *element,
+                                 QHash<QString, QString> &attributes,
+                                 const QString &name,
+                                 double since);
+    bool endElement(const QStringRef& localName);
+    template <class String> // QString/QStringRef
+    bool characters(const String &ch);
+    void fetchAttributeValues(const QString &name, const QXmlStreamAttributes &atts,
                               QHash<QString, QString> *acceptedAttributes);
 
-    bool importFileElement(const QXmlAttributes &atts);
+    bool importFileElement(const QXmlStreamAttributes &atts);
     bool convertBoolean(const QString &, const QString &, bool);
+    void addFlags(const QString &name, QString flagName,
+                  const QHash<QString, QString> &attributes, double since);
 
     TypeDatabase* m_database;
     StackElement* m_current;

@@ -29,31 +29,33 @@
 #include "testconversionoperator.h"
 #include <QtTest/QTest>
 #include "testutil.h"
-
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestConversionOperator::testConversionOperator()
 {
     const char cppCode[] = "\
-    struct A {\
-    };\
-    struct B {\
-        operator A() const;\
-    };\
-    struct C {\
-        operator A() const;\
-    };";
+    struct A {\n\
+    };\n\
+    struct B {\n\
+        operator A() const;\n\
+    };\n\
+    struct C {\n\
+        operator A() const;\n\
+    };\n";
     const char xmlCode[] = "\
-    <typesystem package=\"Foo\">\
-        <value-type name='A' />\
-        <value-type name='B' />\
-        <value-type name='C' />\
-    </typesystem>";
+    <typesystem package=\"Foo\">\n\
+        <value-type name='A'/>\n\
+        <value-type name='B'/>\n\
+        <value-type name='C'/>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
-    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
-    AbstractMetaClass* classC = classes.findClass(QLatin1String("C"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
+    const AbstractMetaClass *classB = AbstractMetaClass::findClass(classes, QLatin1String("B"));
+    const AbstractMetaClass *classC = AbstractMetaClass::findClass(classes, QLatin1String("C"));
     QVERIFY(classA);
     QVERIFY(classB);
     QVERIFY(classC);
@@ -76,19 +78,20 @@ void TestConversionOperator::testConversionOperator()
 void TestConversionOperator::testConversionOperatorOfDiscardedClass()
 {
     const char cppCode[] = "\
-    struct A {\
-    };\
-    struct B {\
-        operator A() const;\
-    };";
+    struct A {\n\
+    };\n\
+    struct B {\n\
+        operator A() const;\n\
+    };\n";
     const char xmlCode[] = "\
-    <typesystem package=\"Foo\">\
-        <value-type name='A' />\
-    </typesystem>";
+    <typesystem package=\"Foo\">\n\
+        <value-type name='A' />\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
     QCOMPARE(classA->externalConversionOperators().count(), 0);
 }
@@ -96,23 +99,24 @@ void TestConversionOperator::testConversionOperatorOfDiscardedClass()
 void TestConversionOperator::testRemovedConversionOperator()
 {
     const char cppCode[] = "\
-    struct A {\
-    };\
-    struct B {\
-        operator A() const;\
-    };";
+    struct A {\n\
+    };\n\
+    struct B {\n\
+        operator A() const;\n\
+    };\n";
     const char xmlCode[] = "\
-    <typesystem package=\"Foo\">\
-        <value-type name='A' />\
-        <value-type name='B'>\
-            <modify-function signature='operator A() const' remove='all' />\
-        </value-type>\
-    </typesystem>";
+    <typesystem package=\"Foo\">\n\
+        <value-type name='A' />\n\
+        <value-type name='B'>\n\
+            <modify-function signature='operator A() const' remove='all'/>\n\
+        </value-type>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
-    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
+    const AbstractMetaClass *classB = AbstractMetaClass::findClass(classes, QLatin1String("B"));
     QVERIFY(classA);
     QVERIFY(classB);
     QCOMPARE(classA->functions().count(), 2);
@@ -124,20 +128,21 @@ void TestConversionOperator::testRemovedConversionOperator()
 void TestConversionOperator::testConversionOperatorReturningReference()
 {
     const char cppCode[] = "\
-    struct A {};\
-    struct B {\
-        operator A&() const;\
-    };";
+    struct A {};\n\
+    struct B {\n\
+        operator A&() const;\n\
+    };\n";
     const char xmlCode[] = "\
-    <typesystem package='Foo'>\
-        <value-type name='A' />\
-        <value-type name='B' />\
-    </typesystem>";
+    <typesystem package='Foo'>\n\
+        <value-type name='A'/>\n\
+        <value-type name='B'/>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
-    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
+    const AbstractMetaClass *classB = AbstractMetaClass::findClass(classes, QLatin1String("B"));
     QVERIFY(classA);
     QVERIFY(classB);
     QCOMPARE(classA->functions().count(), 2);
@@ -153,20 +158,21 @@ void TestConversionOperator::testConversionOperatorReturningReference()
 void TestConversionOperator::testConversionOperatorReturningConstReference()
 {
     const char cppCode[] = "\
-    struct A {};\
-    struct B {\
-        operator const A&() const;\
-    };";
+    struct A {};\n\
+    struct B {\n\
+        operator const A&() const;\n\
+    };\n";
     const char xmlCode[] = "\
-    <typesystem package='Foo'>\
-        <value-type name='A' />\
-        <value-type name='B' />\
-    </typesystem>";
+    <typesystem package='Foo'>\n\
+        <value-type name='A'/>\n\
+        <value-type name='B'/>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
-    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
+    const AbstractMetaClass *classB = AbstractMetaClass::findClass(classes, QLatin1String("B"));
     QVERIFY(classA);
     QVERIFY(classB);
     QCOMPARE(classA->functions().count(), 2);

@@ -29,27 +29,30 @@
 #include "testnamespace.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
-void TestNamespace::testNamespaceMembers()
+void NamespaceTest::testNamespaceMembers()
 {
     const char* cppCode = "\
-    namespace Namespace\
-    {\
-        enum Option {\
-            OpZero,\
-            OpOne\
-        };\
-        void foo(Option opt);\
-    };";
+    namespace Namespace\n\
+    {\n\
+        enum Option {\n\
+            OpZero,\n\
+            OpOne\n\
+        };\n\
+        void foo(Option opt);\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <namespace-type name='Namespace'>\
-            <enum-type name='Option' /> \
-        </namespace-type>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* ns = classes.findClass(QLatin1String("Namespace"));
+    <typesystem package='Foo'>\n\
+        <namespace-type name='Namespace'>\n\
+            <enum-type name='Option' />\n\
+        </namespace-type>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    AbstractMetaClass *ns = AbstractMetaClass::findClass(classes, QLatin1String("Namespace"));
     QVERIFY(ns);
     const AbstractMetaEnum* metaEnum = ns->findEnum(QLatin1String("Option"));
     QVERIFY(metaEnum);
@@ -57,36 +60,37 @@ void TestNamespace::testNamespaceMembers()
     QVERIFY(func);
 }
 
-void TestNamespace::testNamespaceInnerClassMembers()
+void NamespaceTest::testNamespaceInnerClassMembers()
 {
     const char* cppCode = "\
-    namespace OuterNamespace\
-    {\
-        namespace InnerNamespace {\
-            struct SomeClass {\
-                void method();\
-            };\
-        };\
-    };";
+    namespace OuterNamespace\n\
+    {\n\
+        namespace InnerNamespace {\n\
+            struct SomeClass {\n\
+                void method();\n\
+            };\n\
+        };\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <namespace-type name='OuterNamespace'>\
-            <namespace-type name='InnerNamespace'>\
-                <value-type name='SomeClass' /> \
-            </namespace-type>\
-        </namespace-type>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* ons = classes.findClass(QLatin1String("OuterNamespace"));
+    <typesystem package='Foo'>\n\
+        <namespace-type name='OuterNamespace'>\n\
+            <namespace-type name='InnerNamespace'>\n\
+                <value-type name='SomeClass'/>\n\
+            </namespace-type>\n\
+        </namespace-type>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *ons = AbstractMetaClass::findClass(classes, QLatin1String("OuterNamespace"));
     QVERIFY(ons);
-    AbstractMetaClass* ins = classes.findClass(QLatin1String("OuterNamespace::InnerNamespace"));
+    const AbstractMetaClass *ins = AbstractMetaClass::findClass(classes, QLatin1String("OuterNamespace::InnerNamespace"));
     QVERIFY(ins);
-    AbstractMetaClass* sc = classes.findClass(QLatin1String("OuterNamespace::InnerNamespace::SomeClass"));
+    const AbstractMetaClass *sc = AbstractMetaClass::findClass(classes, QLatin1String("OuterNamespace::InnerNamespace::SomeClass"));
     QVERIFY(sc);
     const AbstractMetaFunction* meth = sc->findFunction(QLatin1String("method"));
     QVERIFY(meth);
 }
 
-QTEST_APPLESS_MAIN(TestNamespace)
+QTEST_APPLESS_MAIN(NamespaceTest)
 

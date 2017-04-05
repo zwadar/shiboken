@@ -29,7 +29,8 @@
 #include "testtyperevision.h"
 #include <QtTest/QTest>
 #include "testutil.h"
-
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestTypeRevision::testRevisionAttr()
 {
@@ -44,15 +45,16 @@ void TestTypeRevision::testRevisionAttr()
                         "    <enum-type name=\"Rev_5\" revision=\"5\" flags=\"Flag_5\" />"
                         "</object-type>"
                         "</typesystem>";
-    TestUtil t(cppCode, xmlCode);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* rev0 = classes.findClass(QLatin1String("Rev_0"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *rev0 = AbstractMetaClass::findClass(classes, QLatin1String("Rev_0"));
     QCOMPARE(getTypeRevision(rev0->typeEntry()), 0);
 
-    AbstractMetaClass* rev1 = classes.findClass(QLatin1String("Rev_1"));
+    const AbstractMetaClass *rev1 = AbstractMetaClass::findClass(classes, QLatin1String("Rev_1"));
     QCOMPARE(getTypeRevision(rev1->typeEntry()), 1);
 
-    AbstractMetaClass* rev2 = classes.findClass(QLatin1String("Rev_2"));
+    AbstractMetaClass *rev2 = AbstractMetaClass::findClass(classes, QLatin1String("Rev_2"));
     QCOMPARE(getTypeRevision(rev2->typeEntry()), 2);
 
     AbstractMetaEnum* rev3 = rev2->findEnum(QLatin1String("Rev_3"));

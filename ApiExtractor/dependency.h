@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2017 The Qt Company Ltd.
 ** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of PySide2.
@@ -26,22 +26,18 @@
 **
 ****************************************************************************/
 
-#ifndef SHIBOKENNORMALIZE_P_H
-#define SHIBOKENNORMALIZE_P_H
+#ifndef DEPENDENCY_H
+#define DEPENDENCY_H
 
-#include <QMetaObject>
-#include <QByteArray>
+#include <QtCore/QString>
+#include <QtCore/QVector>
 
+// Dependencies for topologically sorting classes
+struct Dependency {
+    QString parent;
+    QString child;
+};
 
-#if (QT_VERSION < QT_VERSION_CHECK(4, 7, 0))
-    QByteArray QMetaObject_normalizedTypeQt47(const char *type);
-    QByteArray QMetaObject_normalizedSignatureQt47(const char *type);
+typedef QVector<Dependency> Dependencies;
 
-    #define SBK_NORMALIZED_TYPE(x) QMetaObject_normalizedTypeQt47(x)
-    #define SBK_NORMALIZED_SIGNATURE(x) QMetaObject_normalizedSignatureQt47(x)
-#else
-    #define SBK_NORMALIZED_TYPE(x) QMetaObject::normalizedType(x)
-    #define SBK_NORMALIZED_SIGNATURE(x) QMetaObject::normalizedSignature(x)
-#endif
-
-#endif //SHIBOKENNORMALIZE_P_H
+#endif // DEPENDENCY_H

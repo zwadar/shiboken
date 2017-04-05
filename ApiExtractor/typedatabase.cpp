@@ -30,22 +30,40 @@
 #include "typesystem.h"
 #include "typesystem_p.h"
 
-#include <QFile>
-#include <QtXml/QtXml>
+#include <QtCore/QFile>
+#include <QtCore/QDir>
+#include <QtCore/QPair>
+#include <QtCore/QVector>
+#include <QtCore/QRegularExpression>
+#include <QtCore/QVersionNumber>
+#include <QtCore/QXmlStreamReader>
 #include "reporthandler.h"
 // #include <tr1/tuple>
 #include <algorithm>
 #include <QtAlgorithms>
 
 // package -> api-version
-typedef QMap<QString, QByteArray> ApiVersionMap;
 
-Q_GLOBAL_STATIC(ApiVersionMap, apiVersions)
+static QString wildcardToRegExp(QString w)
+{
+    w.replace(QLatin1Char('?'), QLatin1Char('.'));
+    w.replace(QLatin1Char('*'), QStringLiteral(".*"));
+    return w;
+}
 
-TypeDatabase::TypeDatabase() : m_suppressWarnings(true), m_apiVersion(0)
+typedef QPair<QRegularExpression, QVersionNumber> ApiVersion;
+typedef QVector<ApiVersion> ApiVersions;
+
+Q_GLOBAL_STATIC(ApiVersions, apiVersions)
+
+TypeDatabase::TypeDatabase() : m_suppressWarnings(true)
 {
     addType(new VoidTypeEntry());
     addType(new VarargsTypeEntry());
+}
+
+TypeDatabase::~TypeDatabase()
+{
 }
 
 TypeDatabase* TypeDatabase::instance(bool newInstance)
@@ -59,21 +77,46 @@ TypeDatabase* TypeDatabase::instance(bool newInstance)
     return db;
 }
 
-QString TypeDatabase::normalizedSignature(const char* signature)
+// A list of regex/replacements to fix int types like "ushort" to "unsigned short"
+// unless present in TypeDatabase
+struct IntTypeNormalizationEntry
 {
-    QString normalized = QLatin1String(QMetaObject::normalizedSignature(signature));
+    QRegularExpression regex;
+    QString replacement;
+};
 
-    if (!instance() || !QByteArray(signature).contains("unsigned"))
-        return normalized;
+typedef QVector<IntTypeNormalizationEntry> IntTypeNormalizationEntries;
 
-    QStringList types;
-    types << QLatin1String("char") << QLatin1String("short")
-        << QLatin1String("int") << QLatin1String("long");
-    foreach (const QString& type, types) {
-        if (instance()->findType(QLatin1Char('u') + type))
-            continue;
-        const QString pattern = QLatin1String("\\bu") + type + QLatin1String("\\b");
-        normalized.replace(QRegExp(pattern), QLatin1String("unsigned ") + type);
+static const IntTypeNormalizationEntries &intTypeNormalizationEntries()
+{
+    static IntTypeNormalizationEntries result;
+    static bool firstTime = true;
+    if (firstTime) {
+        firstTime = false;
+        static const char *intTypes[] = {"char", "short", "int", "long"};
+        const size_t size = sizeof(intTypes) / sizeof(intTypes[0]);
+        for (size_t i = 0; i < size; ++i) {
+            const QString intType = QLatin1String(intTypes[i]);
+            if (!TypeDatabase::instance()->findType(QLatin1Char('u') + intType)) {
+                IntTypeNormalizationEntry entry;
+                entry.replacement = QStringLiteral("unsigned ") + intType;
+                entry.regex.setPattern(QStringLiteral("\\bu") + intType + QStringLiteral("\\b"));
+                Q_ASSERT(entry.regex.isValid());
+                result.append(entry);
+            }
+        }
+    }
+    return result;
+}
+
+QString TypeDatabase::normalizedSignature(const QString &signature)
+{
+    QString normalized = QLatin1String(QMetaObject::normalizedSignature(signature.toUtf8().constData()));
+
+    if (instance() && signature.contains(QLatin1String("unsigned"))) {
+        const IntTypeNormalizationEntries &entries = intTypeNormalizationEntries();
+        for (int i = 0, size = entries.size(); i < size; ++i)
+            normalized.replace(entries.at(i).regex, entries.at(i).replacement);
     }
 
     return normalized;
@@ -131,22 +174,6 @@ FunctionTypeEntry* TypeDatabase::findFunctionType(const QString& name) const
     return 0;
 }
 
-
-PrimitiveTypeEntry* TypeDatabase::findTargetLangPrimitiveType(const QString& targetLangName) const
-{
-    for (TypeEntryHash::const_iterator it = m_entries.cbegin(), end = m_entries.cend(); it != end; ++it) {
-        foreach (TypeEntry* e, it.value()) {
-            if (e && e->isPrimitive()) {
-                PrimitiveTypeEntry *pe = static_cast<PrimitiveTypeEntry*>(e);
-                if (pe->targetLangName() == targetLangName && pe->preferredConversion())
-                    return pe;
-            }
-        }
-    }
-
-    return 0;
-}
-
 TypeEntry* TypeDatabase::findType(const QString& name) const
 {
     QList<TypeEntry *> entries = findTypes(name);
@@ -157,6 +184,11 @@ TypeEntry* TypeDatabase::findType(const QString& name) const
         }
     }
     return 0;
+}
+
+QList<TypeEntry *> TypeDatabase::findTypes(const QString &name) const
+{
+    return m_entries.value(name);
 }
 
 SingleTypeEntryHash TypeDatabase::entries() const
@@ -179,7 +211,7 @@ QList<const PrimitiveTypeEntry*> TypeDatabase::primitiveTypes() const
     foreach(QString key, sorted_keys) {
         foreach(const TypeEntry* typeEntry, entries[key]) {
             if (typeEntry->isPrimitive())
-                returned.append((PrimitiveTypeEntry*) typeEntry);
+                returned.append(static_cast<PrimitiveTypeEntry *>(typeEntry));
         }
     }
     return returned;
@@ -194,7 +226,7 @@ QList<const ContainerTypeEntry*> TypeDatabase::containerTypes() const
     foreach(QString key, sorted_keys) {
         foreach(const TypeEntry* typeEntry, entries[key]) {
             if (typeEntry->isContainer())
-                returned.append((ContainerTypeEntry*) typeEntry);
+                returned.append(static_cast<ContainerTypeEntry *>(typeEntry));
         }
     }
     return returned;
@@ -213,9 +245,6 @@ void TypeDatabase::addRejection(const QString& className, const QString& functio
 
 bool TypeDatabase::isClassRejected(const QString& className) const
 {
-    if (!m_rebuildClasses.isEmpty())
-        return !m_rebuildClasses.contains(className);
-
     foreach (const TypeRejection& r, m_rejections) {
         if (r.class_name == className && r.function_name == QLatin1String("*")
             && r.field_name == QLatin1String("*") && r.enum_name == QLatin1String("*")) {
@@ -235,6 +264,11 @@ bool TypeDatabase::isEnumRejected(const QString& className, const QString& enumN
     }
 
     return false;
+}
+
+void TypeDatabase::addType(TypeEntry *e)
+{
+    m_entries[e->qualifiedCppName()].append(e);
 }
 
 bool TypeDatabase::isFunctionRejected(const QString& className, const QString& functionName) const
@@ -258,20 +292,35 @@ bool TypeDatabase::isFieldRejected(const QString& className, const QString& fiel
 
 FlagsTypeEntry* TypeDatabase::findFlagsType(const QString &name) const
 {
-    FlagsTypeEntry* fte = (FlagsTypeEntry*) findType(name);
+    TypeEntry *fte = findType(name);
     if (!fte) {
-        fte = (FlagsTypeEntry*) m_flagsEntries.value(name);
+        fte = m_flagsEntries.value(name);
         if (!fte) {
             //last hope, search for flag without scope  inside of flags hash
             for (SingleTypeEntryHash::const_iterator it = m_flagsEntries.cbegin(), end = m_flagsEntries.cend(); it != end; ++it) {
                 if (it.key().endsWith(name)) {
-                    fte = static_cast<FlagsTypeEntry *>(const_cast<TypeEntry *>(it.value()));
+                    fte = it.value();
                     break;
                 }
             }
         }
     }
-    return fte;
+    return static_cast<FlagsTypeEntry *>(fte);
+}
+
+void TypeDatabase::addFlagsType(FlagsTypeEntry *fte)
+{
+    m_flagsEntries[fte->originalName()] = fte;
+}
+
+void TypeDatabase::addTemplate(TemplateEntry *t)
+{
+    m_templates[t->name()] = t;
+}
+
+void TypeDatabase::addGlobalUserFunctions(const AddedFunctionList &functions)
+{
+    m_globalUserFunctions << functions;
 }
 
 AddedFunctionList TypeDatabase::findGlobalUserFunctions(const QString& name) const
@@ -284,6 +333,10 @@ AddedFunctionList TypeDatabase::findGlobalUserFunctions(const QString& name) con
     return addedFunctions;
 }
 
+void TypeDatabase::addGlobalUserFunctionModifications(const FunctionModificationList &functionModifications)
+{
+    m_functionMods << functionModifications;
+}
 
 QString TypeDatabase::globalNamespaceClassName(const TypeEntry * /*entry*/)
 {
@@ -300,6 +353,11 @@ FunctionModificationList TypeDatabase::functionModifications(const QString& sign
     }
 
     return lst;
+}
+
+void TypeDatabase::addSuppressedWarning(const QString &s)
+{
+    m_suppressedWarnings.append(s);
 }
 
 bool TypeDatabase::isSuppressedWarning(const QString& s) const
@@ -354,6 +412,11 @@ bool TypeDatabase::parseFile(const QString &filename, bool generate)
             << "Can't find " << filename << ", typesystem paths: " << m_typesystemPaths.join(QLatin1String(", "));
         return false;
     }
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qCWarning(lcShiboken).noquote().nospace()
+            << "Can't open " << QDir::toNativeSeparators(filename) << ": " << file.errorString();
+        return false;
+    }
 
     int count = m_entries.size();
     bool ok = parseFile(&file, generate);
@@ -369,17 +432,9 @@ bool TypeDatabase::parseFile(const QString &filename, bool generate)
 
 bool TypeDatabase::parseFile(QIODevice* device, bool generate)
 {
-    if (m_apiVersion) // backwards compatibility with deprecated API
-        setApiVersion(QLatin1String("*"), QByteArray::number(m_apiVersion));
-
-    QXmlInputSource source(device);
-    QXmlSimpleReader reader;
+    QXmlStreamReader reader(device);
     Handler handler(this, generate);
-
-    reader.setContentHandler(&handler);
-    reader.setErrorHandler(&handler);
-
-    return reader.parse(&source, false);
+    return handler.parse(reader);
 }
 
 PrimitiveTypeEntry *TypeDatabase::findPrimitiveType(const QString& name) const
@@ -422,11 +477,6 @@ NamespaceTypeEntry* TypeDatabase::findNamespaceType(const QString& name) const
             return static_cast<NamespaceTypeEntry*>(entry);
     }
     return 0;
-}
-
-bool TypeDatabase::supportedApiVersion(double version) const
-{
-    return version <= m_apiVersion;
 }
 
 bool TypeDatabase::shouldDropTypeEntry(const QString& fullTypeName) const
@@ -518,46 +568,131 @@ int getMaxTypeIndex()
     return maxTypeIndex;
 }
 
-void TypeDatabase::setApiVersion(const QString& package, const QByteArray& version)
+bool TypeDatabase::setApiVersion(const QString& packageWildcardPattern, const QString &version)
 {
-    (*apiVersions())[package.trimmed()] = version.trimmed();
-}
-
-/**
- * Returns -1, 0 or 1 if v1 is less, equal or greater than v2
- */
-static int versionCheck(const QByteArray& v1, const QByteArray& v2)
-{
-    if (v1.isEmpty() || v2.isEmpty())
-        return 0;
-
-    QList<QByteArray> v1Components = v1.split('.');
-    QList<QByteArray> v2Components = v2.split('.');
-    int numComponents = qMax(v1Components.count(), v2Components.count());
-    while (v1Components.count() < numComponents)
-        v1Components.append("0");
-    while (v2Components.count() < numComponents)
-        v2Components.append("0");
-
-    for (int i = 0, max = v1Components.count(); i < max; ++i) {
-        int v1Comp = v1Components[i].toInt();
-        int v2Comp = v2Components[i].toInt();
-        if (v1Comp > v2Comp)
-            return 1;
-        else if (v1Comp < v2Comp)
-            return -1;
+    const QString packagePattern = wildcardToRegExp(packageWildcardPattern.trimmed());
+    const QVersionNumber versionNumber = QVersionNumber::fromString(version);
+    if (versionNumber.isNull())
+        return false;
+    ApiVersions &versions = *apiVersions();
+    for (int i = 0, size = versions.size(); i < size; ++i) {
+        if (versions.at(i).first.pattern() == packagePattern) {
+            versions[i].second = versionNumber;
+            return true;
+        }
     }
-    return 0;
+    const QRegularExpression packageRegex(packagePattern);
+    if (!packageRegex.isValid())
+        return false;
+    versions.append(qMakePair(packageRegex, versionNumber));
+    return true;
 }
 
-bool TypeDatabase::checkApiVersion(const QString& package, const QByteArray& version) const
+bool TypeDatabase::checkApiVersion(const QString& package, const QString& version) const
 {
-    ApiVersionMap* vMap = apiVersions();
-    ApiVersionMap::const_iterator it = vMap->begin();
-    for (; it != vMap->end(); ++it) {
-        QRegExp regex(it.key(), Qt::CaseSensitive, QRegExp::Wildcard);
-        if (regex.exactMatch(package))
-            return versionCheck(it.value(), version) >= 0;
+    const QVersionNumber versionNumber = QVersionNumber::fromString(version);
+    if (versionNumber.isNull()) {
+        qCWarning(lcShiboken).noquote().nospace()
+            << "checkApiVersion: Invalid version \"" << version << "\" specified for package "
+            << package << '.';
+        return false;
+    }
+    const ApiVersions &versions = *apiVersions();
+    for (int i = 0, size = versions.size(); i < size; ++i) {
+        if (versions.at(i).first.match(package).hasMatch())
+            return versions.at(i).second >= versionNumber;
     }
     return false;
 }
+
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const TypeEntry *te)
+{
+    QDebugStateSaver saver(d);
+    d.noquote();
+    d.nospace();
+    d << "TypeEntry(";
+    if (te) {
+        d << '"' << te->qualifiedCppName() << "\", type=" << te->type();
+        if (te->include().isValid())
+            d << ", include=" << te->include();
+        const IncludeList &extraIncludes = te->extraIncludes();
+        if (const int count = extraIncludes.size()) {
+            d << ", extraIncludes[" << count << "]=";
+            for (int i = 0; i < count; ++i) {
+                if (i)
+                    d << ", ";
+                d << extraIncludes.at(i);
+            }
+        }
+    } else {
+        d << '0';
+    }
+    d << ')';
+    return d;
+}
+
+QDebug operator<<(QDebug d, const TemplateEntry *te)
+{
+    QDebugStateSaver saver(d);
+    d.noquote();
+    d.nospace();
+    d << "TemplateEntry(";
+    if (te) {
+        d << '"' << te->name() << "\", version=" << te->version();
+    } else {
+        d << '0';
+    }
+    d << ')';
+    return d;
+}
+
+void TypeDatabase::formatDebug(QDebug &d) const
+{
+    typedef TypeEntryHash::ConstIterator Eit;
+    typedef SingleTypeEntryHash::ConstIterator Sit;
+    typedef TemplateEntryHash::ConstIterator TplIt;
+    d << "TypeDatabase("
+      << "entries[" << m_entries.size() << "]=";
+    for (Eit it = m_entries.cbegin(), end = m_entries.cend(); it != end; ++it) {
+        const int count = it.value().size();
+        d << '"' << it.key() << "\" [" << count << "]: (";
+        for (int t = 0; t < count; ++t) {
+            if (t)
+                d << ", ";
+            d << it.value().at(t);
+        }
+        d << ")\n";
+    }
+    if (!m_templates.isEmpty()) {
+        d << "templates[" << m_templates.size() << "]=(";
+        const TplIt begin = m_templates.cbegin();
+        for (TplIt it = begin, end = m_templates.cend(); it != end; ++it) {
+            if (it != begin)
+                d << ", ";
+            d << it.value();
+        }
+        d << ")\n";
+    }
+    if (!m_flagsEntries.isEmpty()) {
+        d << "flags[" << m_flagsEntries.size() << "]=(";
+        const Sit begin = m_flagsEntries.cbegin();
+        for (Sit it = begin, end = m_flagsEntries.cend(); it != end; ++it) {
+            if (it != begin)
+                d << ", ";
+            d << it.value();
+        }
+        d << ")\n";
+    }
+    d <<"\nglobalUserFunctions=" << m_globalUserFunctions << ')';
+}
+
+QDebug operator<<(QDebug d, const TypeDatabase &db)
+{
+    QDebugStateSaver saver(d);
+    d.noquote();
+    d.nospace();
+    db.formatDebug(d);
+    return d;
+}
+#endif // !QT_NO_DEBUG_STREAM

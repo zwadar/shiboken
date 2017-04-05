@@ -29,80 +29,77 @@
 #include "testremoveoperatormethod.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestRemoveOperatorMethod::testRemoveOperatorMethod()
 {
     const char* cppCode ="\
-    struct A {\
-        A& operator>>(char&);\
-        A& operator>>(char*);\
-        A& operator>>(signed short&);\
-        A& operator>>(unsigned short&);\
-        A& operator>>(signed int&);\
-        A& operator>>(unsigned int&);\
-        A& operator>>(signed long&);\
-        A& operator>>(unsigned long&);\
-        A& operator>>(__int64&);\
-        A& operator>>(unsigned __int64&);\
-        A& operator>>(float&);\
-        A& operator>>(double&);\
-        A& operator>>(Char&);\
-        A& operator>>(ByteArray&);\
-        A& operator>>(String&);\
-    };\
-    struct Char {};\
-    struct ByteArray {};\
-    struct String {};\
-    ";
+    #include <stdint.h>\n\
+    \n\
+    struct Char {};\n\
+    struct ByteArray {};\n\
+    struct String {};\n\
+    \n\
+    struct A {\n\
+        A& operator>>(char&);\n\
+        A& operator>>(char*);\n\
+        A& operator>>(short&);\n\
+        A& operator>>(unsigned short&);\n\
+        A& operator>>(int&);\n\
+        A& operator>>(unsigned int&);\n\
+        A& operator>>(int64_t&);\n\
+        A& operator>>(uint64_t&);\n\
+        A& operator>>(float&);\n\
+        A& operator>>(double&);\n\
+        A& operator>>(Char&);\n\
+        A& operator>>(ByteArray&);\n\
+        A& operator>>(String&);\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <primitive-type name='char' />\
-        <primitive-type name='signed short' />\
-        <primitive-type name='unsigned short' />\
-        <primitive-type name='signed int' />\
-        <primitive-type name='unsigned int' />\
-        <primitive-type name='signed long' />\
-        <primitive-type name='unsigned long' />\
-        <primitive-type name='__int64' />\
-        <primitive-type name='unsigned __int64' />\
-        <primitive-type name='float' />\
-        <primitive-type name='double' />\
-        <primitive-type name='Char' />\
-        <primitive-type name='String' />\
-        <value-type name='ByteArray' />\
-        <object-type name='A'>\
-            <modify-function signature='operator&gt;&gt;(char&amp;)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(char*)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(signed short&amp;)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(unsigned short&amp;)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(signed int&amp;)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(unsigned int&amp;)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(signed long&amp;)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(unsigned long&amp;)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(__int64&amp;)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(unsigned __int64&amp;)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(float&amp;)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(double&amp;)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(Char&amp;)' remove='all'/>\
-            <modify-function signature='operator&gt;&gt;(String&amp;)' remove='all'/>\
-        </object-type>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    <typesystem package='Foo'>\n\
+        <primitive-type name='char'/>\n\
+        <primitive-type name='short'/>\n\
+        <primitive-type name='unsigned short'/>\n\
+        <primitive-type name='int'/>\n\
+        <primitive-type name='unsigned int'/>\n\
+        <primitive-type name='int64_t'/>\n\
+        <primitive-type name='uint64_t'/>\n\
+        <primitive-type name='float'/>\n\
+        <primitive-type name='double'/>\n\
+        <primitive-type name='Char'/>\n\
+        <primitive-type name='String'/>\n\
+        <value-type name='ByteArray'/>\n\
+        <object-type name='A'>\n\
+            <modify-function signature='operator&gt;&gt;(char&amp;)' remove='all'/>\n\
+            <modify-function signature='operator&gt;&gt;(char*)' remove='all'/>\n\
+            <modify-function signature='operator&gt;&gt;(short&amp;)' remove='all'/>\n\
+            <modify-function signature='operator&gt;&gt;(unsigned short&amp;)' remove='all'/>\n\
+            <modify-function signature='operator&gt;&gt;(int&amp;)' remove='all'/>\n\
+            <modify-function signature='operator&gt;&gt;(unsigned int&amp;)' remove='all'/>\n\
+            <modify-function signature='operator&gt;&gt;(int64_t&amp;)' remove='all'/>\n\
+            <modify-function signature='operator&gt;&gt;(uint64_t&amp;)' remove='all'/>\n\
+            <modify-function signature='operator&gt;&gt;(float&amp;)' remove='all'/>\n\
+            <modify-function signature='operator&gt;&gt;(double&amp;)' remove='all'/>\n\
+            <modify-function signature='operator&gt;&gt;(Char&amp;)' remove='all'/>\n\
+            <modify-function signature='operator&gt;&gt;(String&amp;)' remove='all'/>\n\
+        </object-type>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
-    QCOMPARE(classA->functions().size(), 15);
+    QCOMPARE(classA->functions().size(), 14);
     QStringList removedSignatures;
     removedSignatures.append(QLatin1String("operator>>(char&)"));
     removedSignatures.append(QLatin1String("operator>>(char*)"));
-    removedSignatures.append(QLatin1String("operator>>(signed short&)"));
+    removedSignatures.append(QLatin1String("operator>>(short&)"));
     removedSignatures.append(QLatin1String("operator>>(unsigned short&)"));
-    removedSignatures.append(QLatin1String("operator>>(signed int&)"));
+    removedSignatures.append(QLatin1String("operator>>(int&)"));
     removedSignatures.append(QLatin1String("operator>>(unsigned int&)"));
-    removedSignatures.append(QLatin1String("operator>>(signed long&)"));
-    removedSignatures.append(QLatin1String("operator>>(unsigned long&)"));
-    removedSignatures.append(QLatin1String("operator>>(__int64&)"));
-    removedSignatures.append(QLatin1String("operator>>(unsigned __int64&)"));
+    removedSignatures.append(QLatin1String("operator>>(int64_t&)"));
+    removedSignatures.append(QLatin1String("operator>>(uint64_t&)"));
     removedSignatures.append(QLatin1String("operator>>(float&)"));
     removedSignatures.append(QLatin1String("operator>>(double&)"));
     removedSignatures.append(QLatin1String("operator>>(Char&)"));

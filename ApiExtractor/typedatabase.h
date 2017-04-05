@@ -29,9 +29,27 @@
 #ifndef TYPEDATABASE_H
 #define TYPEDATABASE_H
 
-#include <QStringList>
-#include "typesystem.h"
 #include "apiextractormacros.h"
+#include "include.h"
+#include "typesystem_enums.h"
+#include "typesystem_typedefs.h"
+
+#include <QtCore/QStringList>
+
+QT_FORWARD_DECLARE_CLASS(QIODevice)
+
+class ComplexTypeEntry;
+class ContainerTypeEntry;
+class FlagsTypeEntry;
+class FunctionTypeEntry;
+class NamespaceTypeEntry;
+class ObjectTypeEntry;
+class TemplateEntry;
+class TypeEntry;
+
+struct TypeRejection;
+
+QT_FORWARD_DECLARE_CLASS(QDebug)
 
 void setTypeRevision(TypeEntry* typeEntry, int revision);
 int getTypeRevision(const TypeEntry* typeEntry);
@@ -43,9 +61,9 @@ class PrimitiveTypeEntry;
 class TypeDatabase
 {
     TypeDatabase();
-    TypeDatabase(const TypeDatabase&);
-    TypeDatabase& operator=(const TypeDatabase&);
+    Q_DISABLE_COPY(TypeDatabase)
 public:
+    ~TypeDatabase();
 
     /**
     * Return the type system instance.
@@ -54,16 +72,11 @@ public:
     */
     static TypeDatabase* instance(bool newInstance = false);
 
-    static QString normalizedSignature(const char* signature);
+    static QString normalizedSignature(const QString &signature);
 
     QStringList requiredTargetImports() const;
 
     void addRequiredTargetImport(const QString& moduleName);
-
-    QStringList typesystemPaths() const
-    {
-        return m_typesystemPaths;
-    }
 
     void addTypesystemPath(const QString& typesystem_paths);
 
@@ -78,19 +91,9 @@ public:
 
     TypeEntry* findType(const QString& name) const;
 
-    QList<TypeEntry *> findTypes(const QString &name) const
-    {
-        return m_entries.value(name);
-    }
-
-    TypeEntryHash allEntries() const
-    {
-        return m_entries;
-    }
+    TypeEntryHash allEntries() const { return m_entries; }
 
     SingleTypeEntryHash entries() const;
-
-    PrimitiveTypeEntry* findTargetLangPrimitiveType(const QString& targetLangName) const;
 
     QList<const PrimitiveTypeEntry*> primitiveTypes() const;
 
@@ -103,111 +106,53 @@ public:
     bool isFieldRejected(const QString& className, const QString& fieldName) const;
     bool isEnumRejected(const QString& className, const QString& enumName) const;
 
-    void addType(TypeEntry* e)
-    {
-        m_entries[e->qualifiedCppName()].append(e);
-    }
+    void addType(TypeEntry* e);
 
-    SingleTypeEntryHash flagsEntries() const
-    {
-        return m_flagsEntries;
-    }
     FlagsTypeEntry* findFlagsType(const QString& name) const;
-    void addFlagsType(FlagsTypeEntry* fte)
-    {
-        m_flagsEntries[fte->originalName()] = fte;
-    }
+    void addFlagsType(FlagsTypeEntry* fte);
 
-    TemplateEntry* findTemplate(const QString& name) const
-    {
-        return m_templates[name];
-    }
+    TemplateEntry *findTemplate(const QString& name) const { return m_templates[name]; }
 
-    void addTemplate(TemplateEntry* t)
-    {
-        m_templates[t->name()] = t;
-    }
+    void addTemplate(TemplateEntry* t);
 
-    AddedFunctionList globalUserFunctions() const
-    {
-        return m_globalUserFunctions;
-    }
+    AddedFunctionList globalUserFunctions() const { return m_globalUserFunctions; }
 
-    void addGlobalUserFunctions(const AddedFunctionList& functions)
-    {
-        m_globalUserFunctions << functions;
-    }
+    void addGlobalUserFunctions(const AddedFunctionList &functions);
 
     AddedFunctionList findGlobalUserFunctions(const QString& name) const;
 
-    void addGlobalUserFunctionModifications(const FunctionModificationList& functionModifications)
-    {
-        m_functionMods << functionModifications;
-    }
-
-    void addGlobalUserFunctionModification(const FunctionModification& functionModification)
-    {
-        m_functionMods << functionModification;
-    }
+    void addGlobalUserFunctionModifications(const FunctionModificationList &functionModifications);
 
     FunctionModificationList functionModifications(const QString& signature) const;
 
-    void setSuppressWarnings(bool on)
-    {
-        m_suppressWarnings = on;
-    }
+    void setSuppressWarnings(bool on) { m_suppressWarnings = on; }
 
-    void addSuppressedWarning(const QString& s)
-    {
-        m_suppressedWarnings.append(s);
-    }
+    void addSuppressedWarning(const QString &s);
 
     bool isSuppressedWarning(const QString& s) const;
 
-    void setRebuildClasses(const QStringList &cls)
-    {
-        m_rebuildClasses = cls;
-    }
-
     static QString globalNamespaceClassName(const TypeEntry *te);
-    QString filename() const
-    {
-        return QLatin1String("typesystem.txt");
-    }
 
-    QString modifiedTypesystemFilepath(const QString& tsFile) const;
     bool parseFile(const QString &filename, bool generate = true);
     bool parseFile(QIODevice* device, bool generate = true);
 
-    APIEXTRACTOR_DEPRECATED(double apiVersion() const)
-    {
-        return m_apiVersion;
-    }
+    bool setApiVersion(const QString& package, const QString& version);
 
-    APIEXTRACTOR_DEPRECATED(void setApiVersion(double version))
-    {
-        m_apiVersion = version;
-    }
-    void setApiVersion(const QString& package, const QByteArray& version);
+    bool checkApiVersion(const QString& package, const QString &version) const;
 
-    APIEXTRACTOR_DEPRECATED(bool supportedApiVersion(double version) const);
-    bool checkApiVersion(const QString& package, const QByteArray& version) const;
-
-    const QStringList& dropTypeEntries() const
-    {
-        return m_dropTypeEntries;
-    }
-
-    bool hasDroppedTypeEntries() const
-    {
-        return !m_dropTypeEntries.isEmpty();
-    }
+    bool hasDroppedTypeEntries() const { return !m_dropTypeEntries.isEmpty(); }
 
     bool shouldDropTypeEntry(const QString& fullTypeName) const;
 
     void setDropTypeEntries(QStringList dropTypeEntries);
 
+#ifndef QT_NO_DEBUG_STREAM
+    void formatDebug(QDebug &d) const;
+#endif
 private:
+    QList<TypeEntry *> findTypes(const QString &name) const;
+    QString modifiedTypesystemFilepath(const QString &tsFile) const;
+
     bool m_suppressWarnings;
     TypeEntryHash m_entries;
     SingleTypeEntryHash m_flagsEntries;
@@ -223,10 +168,12 @@ private:
     QHash<QString, bool> m_parsedTypesystemFiles;
 
     QList<TypeRejection> m_rejections;
-    QStringList m_rebuildClasses;
 
-    double m_apiVersion;
     QStringList m_dropTypeEntries;
 };
 
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const TypeEntry *te);
+QDebug operator<<(QDebug d, const TypeDatabase &db);
 #endif
+#endif // TYPEDATABASE_H

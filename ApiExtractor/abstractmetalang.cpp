@@ -31,6 +31,7 @@
 #include "abstractmetalang.h"
 #include "reporthandler.h"
 #include "typedatabase.h"
+#include "typesystem.h"
 
 #ifndef QT_NO_DEBUG_STREAM
 #  include <QtCore/QMetaEnum>
@@ -94,10 +95,10 @@ AbstractMetaType::AbstractMetaType()
     m_originalTemplateType(0),
     m_pattern(InvalidPattern),
     m_constant(false),
-    m_reference(false),
     m_cppInstantiation(true),
     m_indirections(0),
-    m_reserved(0)
+    m_reserved(0),
+    m_referenceType(NoReference)
 {
 }
 
@@ -107,13 +108,31 @@ AbstractMetaType::~AbstractMetaType()
     m_instantiations.clear();
 }
 
+QString AbstractMetaType::package() const
+{
+    return m_typeEntry->targetLangPackage();
+}
+
+QString AbstractMetaType::name() const
+{
+    if (m_name.isNull())
+        // avoid constLast to stay Qt 5.5 compatible
+        m_name = m_typeEntry->targetLangName().split(QLatin1String("::")).last();
+    return m_name;
+}
+
+QString AbstractMetaType::fullName() const
+{
+    return m_typeEntry->qualifiedTargetLangName();
+}
+
 AbstractMetaType *AbstractMetaType::copy() const
 {
     AbstractMetaType *cpy = new AbstractMetaType;
 
     cpy->setTypeUsagePattern(typeUsagePattern());
     cpy->setConstant(isConstant());
-    cpy->setReference(isReference());
+    cpy->setReferenceType(referenceType());
     cpy->setIndirections(indirections());
     cpy->setInstantiations(instantiations());
     cpy->setArrayElementCount(arrayElementCount());
@@ -146,107 +165,115 @@ QString AbstractMetaType::cppSignature() const
             m_cachedCppSignature += QLatin1String(" >");
         }
 
-        if (actualIndirections()) {
+        if (indirections() || m_referenceType != NoReference) {
             m_cachedCppSignature += QLatin1Char(' ');
             if (indirections())
                 m_cachedCppSignature += QString(indirections(), QLatin1Char('*'));
-            if (isReference())
+            switch (referenceType()) {
+            case NoReference:
+                break;
+            case LValueReference:
                 m_cachedCppSignature += QLatin1Char('&');
+                break;
+            case RValueReference:
+                m_cachedCppSignature += QLatin1String("&&");
+                break;
+            }
         }
     }
     return m_cachedCppSignature;
 }
 
+AbstractMetaType::TypeUsagePattern AbstractMetaType::determineUsagePattern() const
+{
+    if (m_typeEntry->isTemplateArgument() || m_referenceType == RValueReference)
+        return InvalidPattern;
+
+    if (m_typeEntry->isPrimitive() && (!actualIndirections()
+        || (isConstant() && m_referenceType == LValueReference && !indirections()))) {
+        return PrimitivePattern;
+    }
+
+    if (m_typeEntry->isVoid())
+        return NativePointerPattern;
+
+    if (m_typeEntry->isVarargs())
+        return VarargsPattern;
+
+    if (m_typeEntry->isString() && indirections() == 0
+        && (isConstant() == (m_referenceType == LValueReference)
+        || isConstant())) {
+        return StringPattern;
+    }
+
+    if (m_typeEntry->isChar()
+        && indirections() == 0
+        && isConstant() == (m_referenceType == LValueReference)) {
+        return CharPattern;
+    }
+
+    if (m_typeEntry->isJObjectWrapper()
+        && indirections() == 0
+        && isConstant() == (m_referenceType == LValueReference)) {
+        return JObjectWrapperPattern;
+    }
+
+    if (m_typeEntry->isVariant()
+        && indirections() == 0
+        && isConstant() == (m_referenceType == LValueReference)) {
+        return VariantPattern;
+    }
+
+    if (m_typeEntry->isEnum() && actualIndirections() == 0)
+        return EnumPattern;
+
+    if (m_typeEntry->isObject()) {
+        if (indirections() == 0 && m_referenceType == NoReference)
+            return ValuePattern;
+        return static_cast<const ComplexTypeEntry *>(m_typeEntry)->isQObject()
+            ? QObjectPattern : ObjectPattern;
+    }
+
+    if (m_typeEntry->isContainer() && indirections() == 0)
+        return ContainerPattern;
+
+    if (m_typeEntry->isSmartPointer() && indirections() == 0)
+        return SmartPointerPattern;
+
+    if (m_typeEntry->isFlags() && indirections() == 0
+        && (isConstant() == (m_referenceType == LValueReference)))
+        return FlagsPattern;
+
+    if (m_typeEntry->isArray())
+        return ArrayPattern;
+
+    if (m_typeEntry->isThread()) {
+        Q_ASSERT(indirections() == 1);
+        return ThreadPattern;
+    }
+
+    if (m_typeEntry->isValue())
+        return indirections() == 1 ? ValuePointerPattern : ValuePattern;
+
+    if (ReportHandler::isDebug(ReportHandler::FullDebug)) {
+        qCDebug(lcShiboken)
+            << QStringLiteral("native pointer pattern for '%1'").arg(cppSignature());
+    }
+    return NativePointerPattern;
+}
+
 void AbstractMetaType::decideUsagePattern()
 {
-    const TypeEntry* type = typeEntry();
-
-    if (type->isPrimitive() && (!actualIndirections()
-        || (isConstant() && isReference() && !indirections()))) {
-        setTypeUsagePattern(AbstractMetaType::PrimitivePattern);
-
-    } else if (type->isVoid()) {
-        setTypeUsagePattern(AbstractMetaType::NativePointerPattern);
-
-    } else if (type->isVarargs()) {
-        setTypeUsagePattern(AbstractMetaType::VarargsPattern);
-
-    } else if (type->isString()
-               && indirections() == 0
-               && (isConstant() == isReference()
-                   || isConstant())) {
-        setTypeUsagePattern(AbstractMetaType::StringPattern);
-
-    } else if (type->isChar()
-               && !indirections()
-               && isConstant() == isReference()) {
-        setTypeUsagePattern(AbstractMetaType::CharPattern);
-
-    } else if (type->isJObjectWrapper()
-               && !indirections()
-               && isConstant() == isReference()) {
-        setTypeUsagePattern(AbstractMetaType::JObjectWrapperPattern);
-
-    } else if (type->isVariant()
-               && !indirections()
-               && isConstant() == isReference()) {
-        setTypeUsagePattern(AbstractMetaType::VariantPattern);
-
-    } else if (type->isEnum() && !actualIndirections()) {
-        setTypeUsagePattern(AbstractMetaType::EnumPattern);
-
-    } else if (type->isObject() && indirections() == 0) {
-        if (isReference()) {
-            if (((ComplexTypeEntry*) type)->isQObject())
-                setTypeUsagePattern(AbstractMetaType::QObjectPattern);
-            else
-                setTypeUsagePattern(AbstractMetaType::ObjectPattern);
-        } else {
-            setTypeUsagePattern(AbstractMetaType::ValuePattern);
-        }
-
-    } else if (type->isObject()
-               && indirections() == 1) {
-        if (((ComplexTypeEntry*) type)->isQObject())
-            setTypeUsagePattern(AbstractMetaType::QObjectPattern);
-        else
-            setTypeUsagePattern(AbstractMetaType::ObjectPattern);
-
+    TypeUsagePattern pattern = determineUsagePattern();
+    if (m_typeEntry->isObject() && indirections() == 1
+        && m_referenceType == LValueReference && isConstant()) {
         // const-references to pointers can be passed as pointers
-        if (isReference() && isConstant()) {
-            setReference(false);
-            setConstant(false);
-        }
-
-    } else if (type->isContainer() && !indirections()) {
-        setTypeUsagePattern(AbstractMetaType::ContainerPattern);
-
-    } else if (type->isTemplateArgument()) {
-
-    } else if (type->isFlags()
-               && !indirections()
-               && (isConstant() == isReference())) {
-        setTypeUsagePattern(AbstractMetaType::FlagsPattern);
-
-    } else if (type->isArray()) {
-        setTypeUsagePattern(AbstractMetaType::ArrayPattern);
-
-    } else if (type->isThread()) {
-        Q_ASSERT(indirections() == 1);
-        setTypeUsagePattern(AbstractMetaType::ThreadPattern);
-    } else if (type->isValue()) {
-        if (indirections() == 1) {
-            setTypeUsagePattern(AbstractMetaType::ValuePointerPattern);
-        } else {
-            setTypeUsagePattern(AbstractMetaType::ValuePattern);
-        }
-    } else {
-        setTypeUsagePattern(AbstractMetaType::NativePointerPattern);
-        if (ReportHandler::isDebug(ReportHandler::FullDebug)) {
-            qCDebug(lcShiboken)
-              << QStringLiteral("native pointer pattern for '%1'").arg(cppSignature());
-        }
+        setReferenceType(NoReference);
+        setConstant(false);
+        pattern = static_cast<const ComplexTypeEntry *>(m_typeEntry)->isQObject()
+            ? QObjectPattern : ObjectPattern;
     }
+    setTypeUsagePattern(pattern);
 }
 
 bool AbstractMetaType::hasTemplateChildren() const
@@ -298,7 +325,7 @@ QDebug operator<<(QDebug d, const AbstractMetaArgument *aa)
     d.nospace();
     d << "AbstractMetaArgument(";
     if (aa)
-        aa->toString();
+        d << aa->toString();
     else
         d << '0';
     d << ')';
@@ -475,7 +502,6 @@ AbstractMetaFunction *AbstractMetaFunction::copy() const
     cpy->setOriginalName(originalName());
     cpy->setOwnerClass(ownerClass());
     cpy->setImplementingClass(implementingClass());
-    cpy->setInterfaceClass(interfaceClass());
     cpy->setFunctionType(functionType());
     cpy->setAttributes(attributes());
     cpy->setDeclaringClass(declaringClass());
@@ -493,12 +519,25 @@ AbstractMetaFunction *AbstractMetaFunction::copy() const
     return cpy;
 }
 
+bool AbstractMetaFunction::usesRValueReferences() const
+{
+    if (m_functionType == MoveConstructorFunction || m_functionType == MoveAssignmentOperatorFunction)
+        return true;
+    if (m_type && m_type->referenceType() == RValueReference)
+        return true;
+    foreach (const AbstractMetaArgument *a, m_arguments) {
+        if (a->type()->referenceType() == RValueReference)
+            return true;
+    }
+    return false;
+}
+
 QStringList AbstractMetaFunction::introspectionCompatibleSignatures(const QStringList &resolvedArguments) const
 {
     AbstractMetaArgumentList arguments = this->arguments();
     if (arguments.size() == resolvedArguments.size()) {
         QString signature = name() + QLatin1Char('(') + resolvedArguments.join(QLatin1Char(',')) + QLatin1Char(')');
-        return QStringList(TypeDatabase::normalizedSignature(signature.toUtf8().constData()));
+        return QStringList(TypeDatabase::normalizedSignature(signature));
     } else {
         QStringList returned;
 
@@ -521,14 +560,21 @@ QString AbstractMetaFunction::signature() const
         m_cachedSignature += QLatin1Char('(');
 
         for (int i = 0; i < m_arguments.count(); ++i) {
-            if (i > 0)
-                m_cachedSignature += QLatin1String(", ");
             AbstractMetaArgument *a = m_arguments.at(i);
-            m_cachedSignature += a->type()->cppSignature();
-
-            // We need to have the argument names in the qdoc files
-            m_cachedSignature += QLatin1Char(' ');
-            m_cachedSignature += a->name();
+            AbstractMetaType *t = a->type();
+            if (t) {
+                if (i > 0)
+                    m_cachedSignature += QLatin1String(", ");
+                m_cachedSignature += t->cppSignature();
+                // We need to have the argument names in the qdoc files
+                m_cachedSignature += QLatin1Char(' ');
+                m_cachedSignature += a->name();
+            } else {
+                qCWarning(lcShiboken).noquote().nospace()
+                    << QString::fromLatin1("No abstract meta type found for argument '%1' while"
+                                           "constructing signature for function '%2'.")
+                                           .arg(a->name(), name());
+            }
         }
         m_cachedSignature += QLatin1Char(')');
 
@@ -842,17 +888,22 @@ QString AbstractMetaFunction::minimalSignature() const
 
     for (int i = 0; i < arguments.count(); ++i) {
         AbstractMetaType *t = arguments.at(i)->type();
-
-        if (i > 0)
-            minimalSignature += QLatin1Char(',');
-
-        minimalSignature += t->minimalSignature();
+        if (t) {
+            if (i > 0)
+                minimalSignature += QLatin1Char(',');
+            minimalSignature += t->minimalSignature();
+        } else {
+            qCWarning(lcShiboken).noquote().nospace()
+                << QString::fromLatin1("No abstract meta type found for argument '%1' while constructing"
+                                       " minimal signature for function '%2'.")
+                                       .arg(arguments.at(i)->name(), name());
+        }
     }
     minimalSignature += QLatin1Char(')');
     if (isConstant())
         minimalSignature += QLatin1String("const");
 
-    minimalSignature = TypeDatabase::normalizedSignature(minimalSignature.toLocal8Bit().constData());
+    minimalSignature = TypeDatabase::normalizedSignature(minimalSignature);
     m_cachedMinimalSignature = minimalSignature;
 
     return minimalSignature;
@@ -906,14 +957,14 @@ bool AbstractMetaFunction::hasInjectedCode() const
     return false;
 }
 
-CodeSnipList AbstractMetaFunction::injectedCodeSnips(CodeSnip::Position position, TypeSystem::Language language) const
+CodeSnipList AbstractMetaFunction::injectedCodeSnips(TypeSystem::CodeSnipPosition position, TypeSystem::Language language) const
 {
     CodeSnipList result;
     foreach (const FunctionModification &mod, modifications(ownerClass())) {
         if (mod.isCodeInjection()) {
             QList<CodeSnip>::const_iterator it = mod.snips.constBegin();
             for (;it != mod.snips.constEnd(); ++it) {
-                if ((it->language & language) && (it->position == position || position == CodeSnip::Any))
+                if ((it->language & language) && (it->position == position || position == TypeSystem::CodeSnipPositionAny))
                     result << *it;
             }
         }
@@ -1026,10 +1077,8 @@ bool AbstractMetaFunction::isSubscriptOperator() const
 
 bool AbstractMetaFunction::isAssignmentOperator() const
 {
-    if (!isOperatorOverload())
-        return false;
-
-    return originalName() == QLatin1String("operator=");
+    return m_functionType == AssignmentOperatorFunction
+        || m_functionType == MoveAssignmentOperatorFunction;
 }
 
 bool AbstractMetaFunction::isOtherOperator() const
@@ -1079,16 +1128,6 @@ bool AbstractMetaFunction::isInplaceOperator() const
 bool AbstractMetaFunction::isVirtual() const
 {
     return !isFinal() && !isSignal() && !isStatic() && !isFinalInCpp() && !isConstructor();
-}
-
-bool AbstractMetaFunction::isCopyConstructor() const
-{
-    if (!ownerClass() || !isConstructor() || arguments().count() != 1)
-        return false;
-
-    const AbstractMetaType* type = arguments().first()->type();
-    return type->typeEntry() == ownerClass()->typeEntry() &&
-           type->isConstant() && type->isReference();
 }
 
 QString AbstractMetaFunction::modifiedName() const
@@ -1153,9 +1192,40 @@ bool function_sorter(AbstractMetaFunction *a, AbstractMetaFunction *b)
 }
 
 #ifndef QT_NO_DEBUG_STREAM
-static inline void formatMetaFunction(QDebug &d, const AbstractMetaFunction *af)
+static inline void formatMetaFunctionBrief(QDebug &d, const AbstractMetaFunction *af)
 {
     d << '"' << af->minimalSignature() << '"';
+}
+
+void AbstractMetaFunction::formatDebugVerbose(QDebug &d) const
+{
+    d << m_functionType << ' ' << m_type << ' ' << m_name << '(';
+    for (int i = 0, count = m_arguments.size(); i < count; ++i) {
+        if (i)
+            d << ", ";
+        d <<  m_arguments.at(i);
+    }
+    d << "), signature=\"" << minimalSignature() << '"';
+    if (m_constant)
+        d << " [const]";
+    if (m_invalid)
+        d << " [invalid]";
+    if (m_reverse)
+        d << " [reverse]";
+    if (m_userAdded)
+        d << " [userAdded]";
+    if (m_explicit)
+        d << " [explicit]";
+    if (m_pointerOperator)
+        d << " [operator->]";
+    if (m_isCallOperator)
+        d << " [operator()]";
+    if (m_class)
+        d << " class: " << m_class->name();
+    if (m_implementingClass)
+        d << " implementing class: " << m_implementingClass->name();
+    if (m_declaringClass)
+        d << " declaring class: " << m_declaringClass->name();
 }
 
 QDebug operator<<(QDebug d, const AbstractMetaFunction *af)
@@ -1165,8 +1235,16 @@ QDebug operator<<(QDebug d, const AbstractMetaFunction *af)
     d.nospace();
     d << "AbstractMetaFunction(";
     if (af) {
-        d << "signature=";
-        formatMetaFunction(d, af);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+        if (d.verbosity() > 2) {
+            af->formatDebugVerbose(d);
+        } else {
+#endif
+            d << "signature=";
+            formatMetaFunctionBrief(d, af);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+        }
+#endif
     } else {
         d << '0';
     }
@@ -1183,7 +1261,6 @@ AbstractMetaClass::~AbstractMetaClass()
     qDeleteAll(m_functions);
     qDeleteAll(m_fields);
     qDeleteAll(m_enums);
-    qDeleteAll(m_orphanInterfaces);
     if (hasTemplateBaseClassInstantiations()) {
         foreach (AbstractMetaType* inst, templateBaseClassInstantiations())
             delete inst;
@@ -1220,7 +1297,6 @@ AbstractMetaClass *AbstractMetaClass::extractInterface()
         AbstractMetaClass *iface = new AbstractMetaClass;
         iface->setAttributes(attributes());
         iface->setBaseClass(0);
-        iface->setPrimaryInterfaceImplementor(this);
 
         iface->setTypeEntry(typeEntry()->designatedInterface());
 
@@ -1242,7 +1318,6 @@ AbstractMetaClass *AbstractMetaClass::extractInterface()
 
         m_extractedInterface = iface;
         addInterface(iface);
-        m_orphanInterfaces << iface;
     }
 
     return m_extractedInterface;
@@ -1259,20 +1334,6 @@ AbstractMetaFunctionList AbstractMetaClass::queryFunctionsByName(const QString &
         if (function->name() == name)
             returned.append(function);
     }
-
-    return returned;
-}
-
-/*******************************************************************************
- * Returns all reference count modifications for any function in the class
- */
-QList<ReferenceCount> AbstractMetaClass::referenceCounts() const
-{
-    QList<ReferenceCount> returned;
-
-    AbstractMetaFunctionList functions = this->functions();
-    foreach (AbstractMetaFunction *function, functions)
-        returned += function->referenceCounts(this);
 
     return returned;
 }
@@ -1326,18 +1387,6 @@ AbstractMetaFunctionList AbstractMetaClass::virtualFunctions() const
     return returned;
 }
 
-AbstractMetaFunctionList AbstractMetaClass::nonVirtualShellFunctions() const
-{
-    AbstractMetaFunctionList list = functionsInShellClass();
-    AbstractMetaFunctionList returned;
-    foreach (AbstractMetaFunction *f, list) {
-        if (f->isFinalInCpp() && !f->isVirtualSlot())
-            returned += f;
-    }
-
-    return returned;
-}
-
 AbstractMetaFunctionList AbstractMetaClass::implicitConversions() const
 {
     if (!hasCloneOperator() && !hasExternalConversionOperators())
@@ -1345,12 +1394,17 @@ AbstractMetaFunctionList AbstractMetaClass::implicitConversions() const
 
     AbstractMetaFunctionList returned;
     AbstractMetaFunctionList list = queryFunctions(Constructors);
+
     list.append(externalConversionOperators());
 
+    // Exclude anything that uses rvalue references, be it a move
+    // constructor "QPolygon(QPolygon &&)" or something else like
+    // "QPolygon(QVector<QPoint> &&)".
     foreach (AbstractMetaFunction *f, list) {
         if ((f->actualMinimumArgumentCount() == 1 || f->arguments().size() == 1 || f->isConversionOperator())
             && !f->isExplicit()
-            && !f->isCopyConstructor()
+            && f->functionType() != AbstractMetaFunction::CopyConstructorFunction
+            && !f->usesRValueReferences()
             && !f->isModifiedRemoved()
             && (f->originalAttributes() & Public)) {
             returned += f;
@@ -1597,6 +1651,31 @@ void AbstractMetaClass::setBaseClass(AbstractMetaClass *baseClass)
     m_baseClass = baseClass;
     if (baseClass)
         m_isPolymorphic |= baseClass->isPolymorphic();
+}
+
+QString AbstractMetaClass::package() const
+{
+    return m_typeEntry->targetLangPackage();
+}
+
+bool AbstractMetaClass::isInterface() const
+{
+    return m_typeEntry->isInterface();
+}
+
+bool AbstractMetaClass::isNamespace() const
+{
+    return m_typeEntry->isNamespace();
+}
+
+bool AbstractMetaClass::isQObject() const
+{
+    return m_typeEntry->isQObject();
+}
+
+QString AbstractMetaClass::qualifiedCppName() const
+{
+    return m_typeEntry->qualifiedCppName();
 }
 
 bool AbstractMetaClass::hasFunction(const QString &str) const
@@ -1916,7 +1995,7 @@ bool AbstractMetaClass::hasConstructors() const
 bool AbstractMetaClass::hasCopyConstructor() const
 {
     foreach (const AbstractMetaFunction* ctor, queryFunctions(Constructors)) {
-        if (ctor->isCopyConstructor())
+        if (ctor->functionType() == AbstractMetaFunction::CopyConstructorFunction)
             return true;
     }
     return false;
@@ -1925,7 +2004,7 @@ bool AbstractMetaClass::hasCopyConstructor() const
 bool AbstractMetaClass::hasPrivateCopyConstructor() const
 {
     foreach (const AbstractMetaFunction* ctor, queryFunctions(Constructors)) {
-        if (ctor->isCopyConstructor() && ctor->isPrivate())
+        if (ctor->functionType() == AbstractMetaFunction::CopyConstructorFunction && ctor->isPrivate())
             return true;
     }
     return false;
@@ -1958,12 +2037,12 @@ void AbstractMetaClass::addDefaultCopyConstructor(bool isPrivate)
     f->setOriginalName(name());
     f->setName(name());
     f->setOwnerClass(this);
-    f->setFunctionType(AbstractMetaFunction::ConstructorFunction);
+    f->setFunctionType(AbstractMetaFunction::CopyConstructorFunction);
     f->setDeclaringClass(this);
 
     AbstractMetaType* argType = new AbstractMetaType;
     argType->setTypeEntry(typeEntry());
-    argType->setReference(true);
+    argType->setReferenceType(LValueReference);
     argType->setConstant(true);
     argType->setTypeUsagePattern(AbstractMetaType::ValuePattern);
 
@@ -2098,12 +2177,6 @@ AbstractMetaFunctionList AbstractMetaClass::queryFunctions(FunctionQueryOptions 
     }
 
     return functions;
-}
-
-
-bool AbstractMetaClass::hasInconsistentFunctions() const
-{
-    return cppInconsistentFunctions().size() > 0;
 }
 
 bool AbstractMetaClass::hasSignals() const
@@ -2503,8 +2576,16 @@ QString AbstractMetaType::minimalSignature() const
 
     for (int j = 0; j < indirections(); ++j)
         minimalSignature += QLatin1Char('*');
-    if (isReference())
+    switch (referenceType()) {
+    case NoReference:
+        break;
+    case LValueReference:
         minimalSignature += QLatin1Char('&');
+        break;
+    case RValueReference:
+        minimalSignature += QLatin1String("&&");
+        break;
+    }
 
     return minimalSignature;
 }
@@ -2514,13 +2595,24 @@ bool AbstractMetaType::hasNativeId() const
     return (isQObject() || isValue() || isObject()) && typeEntry()->isNativeIdBased();
 }
 
+bool AbstractMetaType::isTargetLangEnum() const
+{
+    return isEnum() && !static_cast<const EnumTypeEntry *>(typeEntry())->forceInteger();
+}
+
+bool AbstractMetaType::isTargetLangFlags() const
+{
+    return isFlags() && !static_cast<const FlagsTypeEntry *>(typeEntry())->forceInteger();
+}
+
 
 /*******************************************************************************
  * Other stuff...
  */
 
 
-AbstractMetaEnum *AbstractMetaClassList::findEnum(const EnumTypeEntry *entry) const
+AbstractMetaEnum *AbstractMetaClass::findEnum(const AbstractMetaClassList &classes,
+                                              const EnumTypeEntry *entry)
 {
     Q_ASSERT(entry->isEnum());
 
@@ -2538,7 +2630,7 @@ AbstractMetaEnum *AbstractMetaClassList::findEnum(const EnumTypeEntry *entry) co
         className = TypeDatabase::globalNamespaceClassName(entry);
     }
 
-    AbstractMetaClass *metaClass = findClass(className);
+    AbstractMetaClass *metaClass = AbstractMetaClass::findClass(classes, className);
     if (!metaClass) {
         qCWarning(lcShiboken).noquote().nospace()
             << QStringLiteral("AbstractMeta::findEnum(), unknown class '%1' in '%2'")
@@ -2558,7 +2650,8 @@ AbstractMetaEnumValue *AbstractMetaEnumValueList::find(const QString &name) cons
     return 0;
 }
 
-AbstractMetaEnumValue *AbstractMetaClassList::findEnumValue(const QString &name) const
+AbstractMetaEnumValue *AbstractMetaClass::findEnumValue(const AbstractMetaClassList &classes,
+                                                        const QString &name)
 {
     QStringList lst = name.split(QLatin1String("::"));
 
@@ -2566,12 +2659,12 @@ AbstractMetaEnumValue *AbstractMetaClassList::findEnumValue(const QString &name)
         QString prefixName = lst.at(0);
         QString enumName = lst.at(1);
 
-        AbstractMetaClass* cl = findClass(prefixName);
+        AbstractMetaClass* cl = findClass(classes, prefixName);
         if (cl)
             return cl->findEnumValue(enumName, 0);
     }
 
-    foreach(AbstractMetaClass* metaClass, *this) {
+    foreach (AbstractMetaClass* metaClass, classes) {
         foreach(AbstractMetaEnum* metaEnum, metaClass->enums()) {
             AbstractMetaEnumValue* enumValue = metaClass->findEnumValue(name, metaEnum);
             if (enumValue)
@@ -2589,22 +2682,23 @@ AbstractMetaEnumValue *AbstractMetaClassList::findEnumValue(const QString &name)
  * C++, Target language base name or complete Target language package.class name.
  */
 
-AbstractMetaClass *AbstractMetaClassList::findClass(const QString &name) const
+AbstractMetaClass *AbstractMetaClass::findClass(const AbstractMetaClassList &classes,
+                                                const QString &name)
 {
     if (name.isEmpty())
         return 0;
 
-    foreach (AbstractMetaClass *c, *this) {
+    foreach (AbstractMetaClass *c, classes) {
         if (c->qualifiedCppName() == name)
             return c;
     }
 
-    foreach (AbstractMetaClass *c, *this) {
+    foreach (AbstractMetaClass *c, classes) {
         if (c->fullName() == name)
             return c;
     }
 
-    foreach (AbstractMetaClass *c, *this) {
+    foreach (AbstractMetaClass *c, classes) {
         if (c->name() == name)
             return c;
     }
@@ -2612,9 +2706,10 @@ AbstractMetaClass *AbstractMetaClassList::findClass(const QString &name) const
     return 0;
 }
 
-AbstractMetaClass *AbstractMetaClassList::findClass(const TypeEntry* typeEntry) const
+AbstractMetaClass *AbstractMetaClass::findClass(const AbstractMetaClassList &classes,
+                                                const TypeEntry* typeEntry)
 {
-    foreach (AbstractMetaClass* c, *this) {
+    foreach (AbstractMetaClass* c, classes) {
         if (c->typeEntry() == typeEntry)
             return c;
     }
@@ -2642,7 +2737,12 @@ QDebug operator<<(QDebug d, const AbstractMetaClass *ac)
             for (int i = 0; i < count; ++i) {
                 if (i)
                     d << ", ";
-                formatMetaFunction(d, functions.at(i));
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+                if (d.verbosity() > 2)
+                    d << functions.at(i);
+                else
+#endif
+                    formatMetaFunctionBrief(d, functions.at(i));
             }
             d << ')';
         }
@@ -2664,3 +2764,23 @@ QDebug operator<<(QDebug d, const AbstractMetaClass *ac)
     return d;
 }
 #endif // !QT_NO_DEBUG_STREAM
+
+QString AbstractMetaEnum::name() const
+{
+    return m_typeEntry->targetLangName();
+}
+
+QString AbstractMetaEnum::qualifier() const
+{
+    return m_typeEntry->targetLangQualifier();
+}
+
+QString AbstractMetaEnum::package() const
+{
+    return m_typeEntry->targetLangPackage();
+}
+
+bool AbstractMetaEnum::isAnonymous() const
+{
+    return m_typeEntry->isAnonymous();
+}

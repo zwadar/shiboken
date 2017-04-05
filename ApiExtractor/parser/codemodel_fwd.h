@@ -31,8 +31,8 @@
 #ifndef CODEMODEL_FWD_H
 #define CODEMODEL_FWD_H
 
-#include "codemodel_pointer.h"
 #include <QtCore/QList>
+#include <QtCore/QSharedPointer>
 
 // forward declarations
 class CodeModel;
@@ -42,30 +42,28 @@ class _CodeModelItem;
 class _EnumModelItem;
 class _EnumeratorModelItem;
 class _FileModelItem;
-class _FunctionDefinitionModelItem;
 class _FunctionModelItem;
 class _NamespaceModelItem;
 class _ScopeModelItem;
 class _TemplateParameterModelItem;
-class _TypeAliasModelItem;
+class _TypeDefModelItem;
 class _VariableModelItem;
 class _MemberModelItem;
 class TypeInfo;
 
-typedef CodeModelPointer<_ArgumentModelItem> ArgumentModelItem;
-typedef CodeModelPointer<_ClassModelItem> ClassModelItem;
-typedef CodeModelPointer<_CodeModelItem> CodeModelItem;
-typedef CodeModelPointer<_EnumModelItem> EnumModelItem;
-typedef CodeModelPointer<_EnumeratorModelItem> EnumeratorModelItem;
-typedef CodeModelPointer<_FileModelItem> FileModelItem;
-typedef CodeModelPointer<_FunctionDefinitionModelItem> FunctionDefinitionModelItem;
-typedef CodeModelPointer<_FunctionModelItem> FunctionModelItem;
-typedef CodeModelPointer<_NamespaceModelItem> NamespaceModelItem;
-typedef CodeModelPointer<_ScopeModelItem> ScopeModelItem;
-typedef CodeModelPointer<_TemplateParameterModelItem> TemplateParameterModelItem;
-typedef CodeModelPointer<_TypeAliasModelItem> TypeAliasModelItem;
-typedef CodeModelPointer<_VariableModelItem> VariableModelItem;
-typedef CodeModelPointer<_MemberModelItem> MemberModelItem;
+typedef QSharedPointer<_ArgumentModelItem> ArgumentModelItem;
+typedef QSharedPointer<_ClassModelItem> ClassModelItem;
+typedef QSharedPointer<_CodeModelItem> CodeModelItem;
+typedef QSharedPointer<_EnumModelItem> EnumModelItem;
+typedef QSharedPointer<_EnumeratorModelItem> EnumeratorModelItem;
+typedef QSharedPointer<_FileModelItem> FileModelItem;
+typedef QSharedPointer<_FunctionModelItem> FunctionModelItem;
+typedef QSharedPointer<_NamespaceModelItem> NamespaceModelItem;
+typedef QSharedPointer<_ScopeModelItem> ScopeModelItem;
+typedef QSharedPointer<_TemplateParameterModelItem> TemplateParameterModelItem;
+typedef QSharedPointer<_TypeDefModelItem> TypeDefModelItem;
+typedef QSharedPointer<_VariableModelItem> VariableModelItem;
+typedef QSharedPointer<_MemberModelItem> MemberModelItem;
 
 typedef QList<ArgumentModelItem> ArgumentList;
 typedef QList<ClassModelItem> ClassList;
@@ -73,12 +71,11 @@ typedef QList<CodeModelItem> ItemList;
 typedef QList<EnumModelItem> EnumList;
 typedef QList<EnumeratorModelItem> EnumeratorList;
 typedef QList<FileModelItem> FileList;
-typedef QList<FunctionDefinitionModelItem> FunctionDefinitionList;
 typedef QList<FunctionModelItem> FunctionList;
 typedef QList<NamespaceModelItem> NamespaceList;
 typedef QList<ScopeModelItem> ScopeList;
 typedef QList<TemplateParameterModelItem> TemplateParameterList;
-typedef QList<TypeAliasModelItem> TypeAliasList;
+typedef QList<TypeDefModelItem> TypeDefList;
 typedef QList<VariableModelItem> VariableList;
 typedef QList<MemberModelItem> MemberList;
 

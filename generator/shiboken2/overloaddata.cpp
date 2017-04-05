@@ -26,19 +26,22 @@
 **
 ****************************************************************************/
 
-#include <QtCore/QFile>
+#include <abstractmetalang.h>
 #include <reporthandler.h>
 #include <graph.h>
 #include "overloaddata.h"
 #include "shibokengenerator.h"
-#include <QTemporaryFile>
 
-static const TypeEntry* getAliasedTypeEntry(const TypeEntry* typeEntry)
+#include <QtCore/QDir>
+#include <QtCore/QFile>
+#include <QtCore/QTemporaryFile>
+
+static const TypeEntry *getReferencedTypeEntry(const TypeEntry *typeEntry)
 {
     if (typeEntry->isPrimitive()) {
         const PrimitiveTypeEntry* pte = dynamic_cast<const PrimitiveTypeEntry*>(typeEntry);
-        while (pte->aliasedTypeEntry())
-            pte = pte->aliasedTypeEntry();
+        while (pte->referencedTypeEntry())
+            pte = pte->referencedTypeEntry();
         typeEntry = pte;
     }
     return typeEntry;
@@ -46,12 +49,12 @@ static const TypeEntry* getAliasedTypeEntry(const TypeEntry* typeEntry)
 
 static QString getTypeName(const AbstractMetaType* type)
 {
-    const TypeEntry* typeEntry = getAliasedTypeEntry(type->typeEntry());
+    const TypeEntry* typeEntry = getReferencedTypeEntry(type->typeEntry());
     QString typeName = typeEntry->name();
     if (typeEntry->isContainer()) {
         QStringList types;
         foreach (const AbstractMetaType* cType, type->instantiations()) {
-            const TypeEntry* typeEntry = getAliasedTypeEntry(cType->typeEntry());
+            const TypeEntry *typeEntry = getReferencedTypeEntry(cType->typeEntry());
             types << typeEntry->name();
         }
         typeName += QLatin1Char('<') + types.join(QLatin1Char(',')) + QLatin1String(" >");
@@ -67,7 +70,7 @@ static QString getTypeName(const OverloadData* ov)
 static bool typesAreEqual(const AbstractMetaType* typeA, const AbstractMetaType* typeB)
 {
     if (typeA->typeEntry() == typeB->typeEntry()) {
-        if (typeA->isContainer()) {
+        if (typeA->isContainer() || typeA->isSmartPointer()) {
             if (typeA->instantiations().size() != typeB->instantiations().size())
                 return false;
 
@@ -147,6 +150,27 @@ static QString getImplicitConversionTypeName(const AbstractMetaType* containerTy
     const ContainerTypeEntry* containerTypeEntry = dynamic_cast<const ContainerTypeEntry*>(containerType->typeEntry());
     return containerTypeEntry->qualifiedCppName() + QLatin1Char('<')
            + types.join(QLatin1String(", ")) + QLatin1String(" >");
+}
+
+static QString msgCyclicDependency(const QString &funcName, const QString &graphName,
+                                   const QList<const AbstractMetaFunction *> &involvedConversions)
+{
+    QString result;
+    QTextStream str(&result);
+    str << "Cyclic dependency found on overloaddata for \"" << funcName
+         << "\" method! The graph boy saved the graph at \"" << QDir::toNativeSeparators(graphName)
+         << "\".";
+    if (const int count = involvedConversions.size()) {
+        str << " Implicit conversions (" << count << "): ";
+        for (int i = 0; i < count; ++i) {
+            if (i)
+                str << ", \"";
+            str << involvedConversions.at(i)->signature() << '"';
+            if (const AbstractMetaClass *c = involvedConversions.at(i)->implementingClass())
+                str << '(' << c->name() << ')';
+        }
+    }
+    return result;
 }
 
 /**
@@ -263,6 +287,8 @@ void OverloadData::sortNextOverloads()
 
     QStringList classesWithIntegerImplicitConversion;
 
+    QList<const AbstractMetaFunction *> involvedConversions;
+
     foreach(OverloadData* ov, m_nextOverloadData) {
         const AbstractMetaType* targetType = ov->argType();
         const QString targetTypeEntryName(getTypeName(ov));
@@ -288,11 +314,12 @@ void OverloadData::sortNextOverloads()
             // container check (This happened to QVariant and QHash)
             graph.removeEdge(targetTypeId, convertibleTypeId);
             graph.addEdge(convertibleTypeId, targetTypeId);
+            involvedConversions.append(function);
         }
 
         // Process inheritance relationships
         if (targetType->isValue() || targetType->isObject()) {
-            const AbstractMetaClass* metaClass = m_generator->classes().findClass(targetType->typeEntry());
+            const AbstractMetaClass *metaClass = AbstractMetaClass::findClass(m_generator->classes(), targetType->typeEntry());
             foreach (const AbstractMetaClass* ancestor, m_generator->getAllAncestors(metaClass)) {
                 QString ancestorTypeName = ancestor->typeEntry()->name();
                 if (!sortData.map.contains(ancestorTypeName))
@@ -321,8 +348,10 @@ void OverloadData::sortNextOverloads()
                 } else {
                     foreach (const AbstractMetaFunction* function, m_generator->implicitConversions(instantiation)) {
                         QString convertibleTypeName = getImplicitConversionTypeName(ov->argType(), instantiation, function);
-                        if (!graph.containsEdge(targetTypeId, sortData.map[convertibleTypeName])) // Avoid cyclic dependency.
+                        if (!graph.containsEdge(targetTypeId, sortData.map[convertibleTypeName])) { // Avoid cyclic dependency.
                             graph.addEdge(sortData.map[convertibleTypeName], targetTypeId);
+                            involvedConversions.append(function);
+                        }
                     }
                 }
             }
@@ -403,9 +432,7 @@ void OverloadData::sortNextOverloads()
         for (; it != sortData.map.end(); ++it)
             nodeNames.insert(it.value(), it.key());
         graph.dumpDot(nodeNames, graphName);
-        qCWarning(lcShiboken).noquote().nospace()
-            << QStringLiteral("Cyclic dependency found on overloaddata for '%1' method! The graph boy saved the graph at %2.")
-                              .arg(funcName, graphName);
+        qCWarning(lcShiboken).noquote() << qPrintable(msgCyclicDependency(funcName, graphName, involvedConversions));
     }
 
     m_nextOverloadData.clear();
@@ -1018,3 +1045,35 @@ AbstractMetaArgumentList OverloadData::getArgumentsWithDefaultValues(const Abstr
     return args;
 }
 
+#ifndef QT_NO_DEBUG_STREAM
+void OverloadData::formatDebug(QDebug &d) const
+{
+    const int count = m_overloads.size();
+    d << "argType=" << m_argType << ", minArgs=" << m_minArgs << ", maxArgs=" << m_maxArgs
+        << ", argPos=" << m_argPos << ", argTypeReplaced=\"" << m_argTypeReplaced
+        << "\", overloads[" << count << "]=(";
+    const int oldVerbosity = d.verbosity();
+    d.setVerbosity(3);
+    for (int i = 0; i < count; ++i) {
+        if (i)
+            d << '\n';
+        d << m_overloads.at(i);
+    }
+    d << ')';
+    d.setVerbosity(oldVerbosity);
+}
+
+QDebug operator<<(QDebug d, const OverloadData *od)
+{
+    QDebugStateSaver saver(d);
+    d.noquote();
+    d.nospace();
+    d << "OverloadData(";
+    if (od)
+        od->formatDebug(d);
+    else
+        d << '0';
+    d << ')';
+    return d;
+}
+#endif // !QT_NO_DEBUG_STREAM

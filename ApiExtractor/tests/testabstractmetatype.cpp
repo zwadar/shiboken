@@ -29,17 +29,20 @@
 #include "testabstractmetatype.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestAbstractMetaType::testConstCharPtrType()
 {
-    const char* cppCode ="const char* justAtest();";
-    const char* xmlCode = "<typesystem package=\"Foo\">\
-        <primitive-type name='char'/>\
-        <function signature='justAtest()' />\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode);
-    QCOMPARE(t.builder()->globalFunctions().size(), 1);
-    AbstractMetaFunction* func = t.builder()->globalFunctions().first();
+    const char* cppCode ="const char* justAtest();\n";
+    const char* xmlCode = "<typesystem package=\"Foo\">\n\
+        <primitive-type name='char'/>\n\
+        <function signature='justAtest()' />\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    QCOMPARE(builder->globalFunctions().size(), 1);
+    AbstractMetaFunction* func = builder->globalFunctions().first();
     AbstractMetaType* rtype = func->type();
     // Test properties of const char*
     QVERIFY(rtype);
@@ -52,61 +55,64 @@ void TestAbstractMetaType::testConstCharPtrType()
     QVERIFY(!rtype->isPrimitive()); // const char* differs from char, so it's not considered a primitive type by apiextractor
     QVERIFY(rtype->isNativePointer());
     QVERIFY(!rtype->isQObject());
-    QVERIFY(!rtype->isReference());
+    QCOMPARE(rtype->referenceType(), NoReference);
     QVERIFY(!rtype->isValue());
     QVERIFY(!rtype->isValuePointer());
 }
 
 void TestAbstractMetaType::testApiVersionSupported()
 {
-    const char* cppCode ="class foo {}; class foo2 {};\
-                          void justAtest(); void justAtest3();";
-    const char* xmlCode = "<typesystem package='Foo'>\
-        <value-type name='foo' since='0.1'/>\
-        <value-type name='foo2' since='1.0'/>\
-        <value-type name='foo3' since='1.1'/>\
-        <function signature='justAtest()' since='0.1'/>\
-        <function signature='justAtest2()' since='1.1'/>\
-        <function signature='justAtest3()'/>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false, "1.0");
+    const char* cppCode ="class foo {}; class foo2 {};\n\
+                          void justAtest(); void justAtest3();\n";
+    const char* xmlCode = "<typesystem package='Foo'>\n\
+        <value-type name='foo' since='0.1'/>\n\
+        <value-type name='foo2' since='1.0'/>\n\
+        <value-type name='foo3' since='1.1'/>\n\
+        <function signature='justAtest()' since='0.1'/>\n\
+        <function signature='justAtest2()' since='1.1'/>\n\
+        <function signature='justAtest3()'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false, "1.0"));
+    QVERIFY(!builder.isNull());
 
-    AbstractMetaClassList classes = t.builder()->classes();
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.size(), 2);
 
 
-    AbstractMetaFunctionList functions = t.builder()->globalFunctions();
+    AbstractMetaFunctionList functions = builder->globalFunctions();
     QCOMPARE(functions.size(), 2);
 }
 
 
 void TestAbstractMetaType::testApiVersionNotSupported()
 {
-    const char* cppCode ="class object {};";
-    const char* xmlCode = "<typesystem package='Foo'>\
-        <value-type name='object' since='0.1'/>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, true, "0.1");
+    const char* cppCode ="class object {};\n";
+    const char* xmlCode = "<typesystem package='Foo'>\n\
+        <value-type name='object' since='0.1'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, true, "0.1"));
+    QVERIFY(!builder.isNull());
 
-    AbstractMetaClassList classes = t.builder()->classes();
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.size(), 1);
 }
 
 void TestAbstractMetaType::testCharType()
 {
-    const char* cppCode ="char justAtest(); class A {};";
-    const char* xmlCode = "<typesystem package=\"Foo\">\
-    <primitive-type name='char'/>\
-    <value-type name='A' />\
-    <function signature='justAtest()' />\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode);
+    const char* cppCode ="char justAtest(); class A {};\n";
+    const char* xmlCode = "<typesystem package=\"Foo\">\n\
+    <primitive-type name='char'/>\n\
+    <value-type name='A'/>\n\
+    <function signature='justAtest()'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
 
-    AbstractMetaClassList classes = t.builder()->classes();
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.size(), 1);
     QCOMPARE(classes.first()->package(), QLatin1String("Foo"));
 
-    AbstractMetaFunctionList functions = t.builder()->globalFunctions();
+    AbstractMetaFunctionList functions = builder->globalFunctions();
     QCOMPARE(functions.size(), 1);
     AbstractMetaFunction* func = functions.first();
     AbstractMetaType* rtype = func->type();
@@ -121,7 +127,7 @@ void TestAbstractMetaType::testCharType()
     QVERIFY(rtype->isPrimitive());
     QVERIFY(!rtype->isNativePointer());
     QVERIFY(!rtype->isQObject());
-    QVERIFY(!rtype->isReference());
+    QCOMPARE(rtype->referenceType(), NoReference);
     QVERIFY(!rtype->isValue());
     QVERIFY(!rtype->isValuePointer());
 }
@@ -129,44 +135,45 @@ void TestAbstractMetaType::testCharType()
 void TestAbstractMetaType::testTypedef()
 {
     const char* cppCode ="\
-    struct A {\
-        void someMethod();\
-    };\
-    typedef A B;\
-    typedef B C;";
-    const char* xmlCode = "<typesystem package=\"Foo\">\
-    <value-type name='C' />\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode);
+    struct A {\n\
+        void someMethod();\n\
+    };\n\
+    typedef A B;\n\
+    typedef B C;\n";
+    const char* xmlCode = "<typesystem package=\"Foo\">\n\
+    <value-type name='C' />\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
 
-    AbstractMetaClassList classes = t.builder()->classes();
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.size(), 1);
-    AbstractMetaClass* c = classes.findClass(QLatin1String("C"));
+    const AbstractMetaClass *c = AbstractMetaClass::findClass(classes, QLatin1String("C"));
     QVERIFY(c);
-    QVERIFY(c->isTypeAlias());
+    QVERIFY(c->isTypeDef());
 }
 
 void TestAbstractMetaType::testTypedefWithTemplates()
 {
     const char* cppCode ="\
-    template<typename T>\
-    class A {};\
-    \
-    class B {};\
-    typedef A<B> C;\
-    \
-    void func(C c);\
-    ";
-    const char* xmlCode = "<typesystem package=\"Foo\">\
-    <container-type name='A' type='list'/>\
-    <value-type name='B' />\
-    <function signature='func(A&lt;B&gt;)' />\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode);
+    template<typename T>\n\
+    class A {};\n\
+    \n\
+    class B {};\n\
+    typedef A<B> C;\n\
+    \n\
+    void func(C c);\n";
+    const char* xmlCode = "<typesystem package=\"Foo\">\n\
+    <container-type name='A' type='list'/>\n\
+    <value-type name='B' />\n\
+    <function signature='func(A&lt;B&gt;)'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
 
-    AbstractMetaClassList classes = t.builder()->classes();
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.size(), 1);
-    AbstractMetaFunctionList functions = t.builder()->globalFunctions();
+    AbstractMetaFunctionList functions = builder->globalFunctions();
     QCOMPARE(functions.count(), 1);
     AbstractMetaFunction* function = functions.first();
     AbstractMetaArgumentList args = function->arguments();
@@ -180,18 +187,18 @@ void TestAbstractMetaType::testTypedefWithTemplates()
 void TestAbstractMetaType::testObjectTypeUsedAsValue()
 {
     const char* cppCode ="\
-    class A {\
-        void method(A);\
-    };\
-    ";
-    const char* xmlCode = "<typesystem package='Foo'>\
-    <object-type name='A' />\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode);
+    class A {\n\
+        void method(A);\n\
+    };\n";
+    const char* xmlCode = "<typesystem package='Foo'>\n\
+    <object-type name='A'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
 
-    AbstractMetaClassList classes = t.builder()->classes();
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.size(), 1);
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
     AbstractMetaFunctionList overloads = classA->queryFunctionsByName(QLatin1String("method"));
     QCOMPARE(overloads.count(), 1);

@@ -1,7 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2016 The Qt Company Ltd.
-** Copyright (C) 2002-2005 Roberto Raggi <roberto@kdevelop.org>
+** Copyright (C) 2017 The Qt Company Ltd.
 ** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of PySide2.
@@ -27,45 +26,33 @@
 **
 ****************************************************************************/
 
-#ifndef CODEMODEL_POINTER_H
-#define CODEMODEL_POINTER_H
+#ifndef TYPESYSTEM_TYPEDEFS_H
+#define TYPESYSTEM_TYPEDEFS_H
 
-#include <QtCore/QSharedData>
-#include <QAtomicPointer>
+#include <QtCore/QHash>
+#include <QtCore/QList>
 
-template <class T> class CodeModelPointer : public QAtomicPointer<T>
-{
-public:
-    typedef T Type;
+class CodeSnip;
+class ContainerTypeEntry;
+class DocModification;
+class PrimitiveTypeEntry;
+class TemplateEntry;
+class TypeEntry;
 
-    inline CodeModelPointer(T *value = 0) : QAtomicPointer<T>(value) {}
+struct AddedFunction;
+struct FieldModification;
+struct FunctionModification;
 
-    inline CodeModelPointer &operator=(T *o)
-    {
-        QAtomicPointer<T>::operator=(o);
-        return *this;
-    }
+typedef QHash<QString, QList<TypeEntry *> > TypeEntryHash;
+typedef QHash<QString, TypeEntry *> SingleTypeEntryHash;
+typedef QHash<QString, TemplateEntry *> TemplateEntryHash;
 
-    inline T *data()
-    {
-        return (T *) *this;
-    }
+typedef QList<AddedFunction> AddedFunctionList;
+typedef QList<CodeSnip> CodeSnipList;
+typedef QList<const ContainerTypeEntry *> ContainerTypeEntryList;
+typedef QList<DocModification> DocModificationList;
+typedef QList<FieldModification> FieldModificationList;
+typedef QList<FunctionModification> FunctionModificationList;
+typedef QList<const PrimitiveTypeEntry *> PrimitiveTypeEntryList;
 
-    inline const T *data() const
-    {
-        return (const T *) *this;
-    }
-
-    inline const T *constData() const
-    {
-        return (const T *) *this;
-    }
-
-    // added for backward compatible behavior in shiboken
-    inline T *operator->() const
-    {
-        return this->load();
-    }
-};
-
-#endif // CODEMODEL_POINTER_H
+#endif // TYPESYSTEM_TYPEDEFS_H

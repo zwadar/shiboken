@@ -28,33 +28,35 @@
 
 #include "testimplicitconversions.h"
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 #include <QtTest/QTest>
 
 void TestImplicitConversions::testWithPrivateCtors()
 {
     const char* cppCode ="\
-    class B;\
-    class C;\
-    class A {\
-        A(const B&);\
-    public:\
-        A(const C&);\
-    };\
-    class B {};\
-    class C {};\
-    ";
+    class B;\n\
+    class C;\n\
+    class A {\n\
+        A(const B&);\n\
+    public:\n\
+        A(const C&);\n\
+    };\n\
+    class B {};\n\
+    class C {};\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <value-type name='A'/> \
-        <value-type name='B'/> \
-        <value-type name='C'/> \
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode);
-    AbstractMetaClassList classes = t.builder()->classes();
+    <typesystem package='Foo'>\n\
+        <value-type name='A'/>\n\
+        <value-type name='B'/>\n\
+        <value-type name='C'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.count(), 3);
 
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
-    AbstractMetaClass* classC = classes.findClass(QLatin1String("C"));
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
+    const AbstractMetaClass *classC = AbstractMetaClass::findClass(classes, QLatin1String("C"));
     AbstractMetaFunctionList implicitConvs = classA->implicitConversions();
     QCOMPARE(implicitConvs.count(), 1);
     QCOMPARE(implicitConvs.first()->arguments().first()->type()->typeEntry(), classC->typeEntry());
@@ -63,27 +65,27 @@ void TestImplicitConversions::testWithPrivateCtors()
 void TestImplicitConversions::testWithModifiedVisibility()
 {
     const char* cppCode ="\
-    class B;\
-    class A {\
-    public:\
-        A(const B&);\
-    };\
-    class B {};\
-    ";
+    class B;\n\
+    class A {\n\
+    public:\n\
+        A(const B&);\n\
+    };\n\
+    class B {};\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <value-type name='A'>\
-            <modify-function signature='A(const B&amp;)'>\
-                <access modifier='private' />\
-            </modify-function>\
-        </value-type>\
-        <value-type name='B'/>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode);
-    AbstractMetaClassList classes = t.builder()->classes();
+    <typesystem package='Foo'>\n\
+        <value-type name='A'>\n\
+            <modify-function signature='A(const B&amp;)'>\n\
+                <access modifier='private'/>\n\
+            </modify-function>\n\
+        </value-type>\n\
+        <value-type name='B'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.count(), 2);
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
-    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
+    const AbstractMetaClass *classB = AbstractMetaClass::findClass(classes, QLatin1String("B"));
     AbstractMetaFunctionList implicitConvs = classA->implicitConversions();
     QCOMPARE(implicitConvs.count(), 1);
     QCOMPARE(implicitConvs.first()->arguments().first()->type()->typeEntry(), classB->typeEntry());
@@ -93,35 +95,35 @@ void TestImplicitConversions::testWithModifiedVisibility()
 void TestImplicitConversions::testWithAddedCtor()
 {
     const char* cppCode ="\
-    class B;\
-    class A {\
-    public:\
-        A(const B&);\
-    };\
-    class B {};\
-    class C {};\
-    ";
+    class B;\n\
+    class A {\n\
+    public:\n\
+        A(const B&);\n\
+    };\n\
+    class B {};\n\
+    class C {};\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <custom-type name='TARGETLANGTYPE' />\
-        <value-type name='A'>\
-            <add-function signature='A(const C&amp;)' />\
-        </value-type>\
-        <value-type name='B'>\
-            <add-function signature='B(TARGETLANGTYPE*)' />\
-        </value-type>\
-        <value-type name='C'/>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode);
-    AbstractMetaClassList classes = t.builder()->classes();
+    <typesystem package='Foo'>\n\
+        <custom-type name='TARGETLANGTYPE'/>\n\
+        <value-type name='A'>\n\
+            <add-function signature='A(const C&amp;)'/>\n\
+        </value-type>\n\
+        <value-type name='B'>\n\
+            <add-function signature='B(TARGETLANGTYPE*)'/>\n\
+        </value-type>\n\
+        <value-type name='C'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.count(), 3);
 
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     AbstractMetaFunctionList implicitConvs = classA->implicitConversions();
     QCOMPARE(implicitConvs.count(), 2);
 
     // Added constructors with custom types should never result in implicit converters.
-    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    const AbstractMetaClass *classB = AbstractMetaClass::findClass(classes, QLatin1String("B"));
     implicitConvs = classB->implicitConversions();
     QCOMPARE(implicitConvs.count(), 0);
 }
@@ -129,21 +131,21 @@ void TestImplicitConversions::testWithAddedCtor()
 void TestImplicitConversions::testWithExternalConversionOperator()
 {
     const char* cppCode ="\
-    class A {};\
-    struct B {\
-        operator A() const;\
-    };\
-    ";
-    const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <value-type name='A'/>\
-        <value-type name='B'/>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode);
-    AbstractMetaClassList classes = t.builder()->classes();
+    class A {};\n\
+    struct B {\n\
+        operator A() const;\n\
+    };\n";
+    const char* xmlCode = "\n\
+    <typesystem package='Foo'>\n\
+        <value-type name='A'/>\n\
+        <value-type name='B'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.count(), 2);
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
-    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    AbstractMetaClass* classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
+    AbstractMetaClass* classB = AbstractMetaClass::findClass(classes, QLatin1String("B"));
     AbstractMetaFunctionList implicitConvs = classA->implicitConversions();
     QCOMPARE(implicitConvs.count(), 1);
     AbstractMetaFunctionList externalConvOps = classA->externalConversionOperators();

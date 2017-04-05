@@ -29,30 +29,34 @@
 #include "testvaluetypedefaultctortag.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestValueTypeDefaultCtorTag::testValueTypeDefaultCtorTagArgument()
 {
-    const char* cppCode ="\
-    struct A {\
-        A(int,int);\
-    };\
-    struct B {};\
+    const char* cppCode ="\n\
+    struct A {\n\
+        A(int,int);\n\
+    };\n\
+    struct B {};\n\
     ";
-    const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <primitive-type name='int' />\
-        <value-type name='A' default-constructor='A(0, 0)' />\
-        <value-type name='B' />\
+    const char* xmlCode = "\n\
+    <typesystem package='Foo'>\n\
+        <primitive-type name='int' />\n\
+        <value-type name='A' default-constructor='A(0, 0)' />\n\
+        <value-type name='B' />\n\
     </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
 
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    AbstractMetaClassList classes = builder->classes();
+
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
     QVERIFY(classA->typeEntry()->hasDefaultConstructor());
     QCOMPARE(classA->typeEntry()->defaultConstructor(), QLatin1String("A(0, 0)"));
 
-    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    const AbstractMetaClass *classB = AbstractMetaClass::findClass(classes, QLatin1String("B"));
     QVERIFY(classB);
     QVERIFY(!classB->typeEntry()->hasDefaultConstructor());
 }

@@ -29,23 +29,25 @@
 #include "testreferencetopointer.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestReferenceToPointer::testReferenceToPointerArgument()
 {
     const char* cppCode ="\
-    struct A {};\
-    struct B {\
-        void dummy(A*&);\
-    };\
-    ";
+    struct A {};\n\
+    struct B {\n\
+        void dummy(A*&);\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package=\"Foo\"> \
-        <object-type name='A' /> \
-        <object-type name='B' /> \
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    <typesystem package=\"Foo\">\n\
+        <object-type name='A'/>\n\
+        <object-type name='B'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *classB = AbstractMetaClass::findClass(classes, QLatin1String("B"));
     QVERIFY(classB);
     const AbstractMetaFunction* func = classB->findFunction(QLatin1String("dummy"));
     QVERIFY(func);

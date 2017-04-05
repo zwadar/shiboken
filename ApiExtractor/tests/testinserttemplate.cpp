@@ -29,25 +29,28 @@
 #include "testinserttemplate.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestInsertTemplate::testInsertTemplateOnClassInjectCode()
 {
-    const char* cppCode ="struct A{};";
+    const char* cppCode ="struct A{};\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <template name='code_template'>\
-        code template content\
-        </template>\
-        <value-type name='A'>\
-            <inject-code class='native'>\
-                <insert-template name='code_template'/>\
-            </inject-code>\
-        </value-type>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
+    <typesystem package='Foo'>\n\
+        <template name='code_template'>\n\
+        code template content\n\
+        </template>\n\
+        <value-type name='A'>\n\
+            <inject-code class='native'>\n\
+                <insert-template name='code_template'/>\n\
+            </inject-code>\n\
+        </value-type>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.count(), 1);
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
     QCOMPARE(classA->typeEntry()->codeSnips().count(), 1);
     QString code = classA->typeEntry()->codeSnips().first().code();
@@ -58,16 +61,17 @@ void TestInsertTemplate::testInsertTemplateOnModuleInjectCode()
 {
     const char* cppCode ="";
     const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <template name='code_template'>\
-        code template content\
-        </template>\
-        <inject-code class='native'>\
-            <insert-template name='code_template'/>\
-        </inject-code>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
+    <typesystem package='Foo'>\n\
+        <template name='code_template'>\n\
+        code template content\n\
+        </template>\n\
+        <inject-code class='native'>\n\
+            <insert-template name='code_template'/>\n\
+        </inject-code>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
     QVERIFY(classes.isEmpty());
 
     TypeEntry* module = TypeDatabase::instance()->findType(QLatin1String("Foo"));
@@ -81,13 +85,14 @@ void TestInsertTemplate::testInvalidTypeSystemTemplate()
 {
     const char* cppCode ="";
     const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <inject-code class='native'>\
-            <insert-template name='this_code_template_does_not_exists'/>\
-        </inject-code>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
+    <typesystem package='Foo'>\n\
+        <inject-code class='native'>\n\
+            <insert-template name='this_code_template_does_not_exists'/>\n\
+        </inject-code>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
     QVERIFY(classes.isEmpty());
 
     TypeEntry* module = TypeDatabase::instance()->findType(QLatin1String("Foo"));
@@ -101,17 +106,18 @@ void TestInsertTemplate::testValidAndInvalidTypeSystemTemplate()
 {
     const char* cppCode ="";
     const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <template name='code_template'>\
-        code template content\
-        </template>\
-        <inject-code class='native'>\
-            <insert-template name='this_code_template_does_not_exists'/>\
-            <insert-template name='code_template'/>\
-        </inject-code>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
+    <typesystem package='Foo'>\n\
+        <template name='code_template'>\n\
+        code template content\n\
+        </template>\n\
+        <inject-code class='native'>\n\
+            <insert-template name='this_code_template_does_not_exists'/>\n\
+            <insert-template name='code_template'/>\n\
+        </inject-code>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
     QVERIFY(classes.isEmpty());
 
     TypeEntry* module = TypeDatabase::instance()->findType(QLatin1String("Foo"));

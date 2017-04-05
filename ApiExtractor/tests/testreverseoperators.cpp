@@ -29,22 +29,25 @@
 #include "testreverseoperators.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestReverseOperators::testReverseSum()
 {
-    const char cppCode[] = "struct A {\
-            A& operator+(int);\
-        };\
+    const char cppCode[] = "struct A {\n\
+            A& operator+(int);\n\
+        };\n\
         A& operator+(int, const A&);";
-    const char xmlCode[] = "\
-    <typesystem package=\"Foo\">\
-        <primitive-type name='int' />\
-        <value-type name='A' />\
+    const char xmlCode[] = "\n\
+    <typesystem package=\"Foo\">\n\
+        <primitive-type name='int' />\n\
+        <value-type name='A' />\n\
     </typesystem>";
 
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    AbstractMetaClass* classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
     QCOMPARE(classA->functions().count(), 4);
 
@@ -69,29 +72,30 @@ void TestReverseOperators::testReverseSum()
 
 void TestReverseOperators::testReverseSumWithAmbiguity()
 {
-    const char cppCode[] = "\
-    struct A { A operator+(int); };\
-    A operator+(int, const A&);\
-    struct B {};\
-    B operator+(const A&, const B&);\
-    B operator+(const B&, const A&);\
-    int operator-(int, const A*);\
-    int operator/(const A*, int);\
+    const char cppCode[] = "\n\
+    struct A { A operator+(int); };\n\
+    A operator+(int, const A&);\n\
+    struct B {};\n\
+    B operator+(const A&, const B&);\n\
+    B operator+(const B&, const A&);\n\
+    int operator-(int, const A*);\n\
+    int operator/(const A*, int);\n\
     ";
-    const char xmlCode[] = "\
-    <typesystem package=\"Foo\">\
-        <primitive-type name='int' />\
-        <value-type name='A' />\
-        <value-type name='B' />\
+    const char xmlCode[] = "\n\
+    <typesystem package=\"Foo\">\n\
+        <primitive-type name='int' />\n\
+        <value-type name='A' />\n\
+        <value-type name='B' />\n\
     </typesystem>";
 
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
     QCOMPARE(classA->functions().count(), 6);
 
-    AbstractMetaClass* classB = classes.findClass(QLatin1String("B"));
+    const AbstractMetaClass *classB = AbstractMetaClass::findClass(classes, QLatin1String("B"));
     QVERIFY(classB);
     QCOMPARE(classB->functions().count(), 4);
 

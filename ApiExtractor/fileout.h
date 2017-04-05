@@ -30,7 +30,6 @@
 #define FILEOUT_H
 
 #include <QtCore/QObject>
-#include <QtCore/QFile>
 #include <QtCore/QTextStream>
 
 class FileOut : public QObject

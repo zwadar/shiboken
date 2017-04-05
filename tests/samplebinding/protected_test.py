@@ -36,7 +36,7 @@ import unittest
 from sample import cacheSize
 from sample import ProtectedNonPolymorphic, ProtectedVirtualDestructor
 from sample import ProtectedPolymorphic, ProtectedPolymorphicDaughter, ProtectedPolymorphicGrandDaughter
-from sample import ProtectedProperty, ProtectedEnumClass
+from sample import createProtectedProperty, ProtectedProperty, ProtectedEnumClass
 from sample import PrivateDtor
 from sample import Event, ObjectType, Point
 
@@ -122,7 +122,7 @@ class ProtectedPolymorphicTest(unittest.TestCase):
         original_name = 'Poly'
         p = ExtendedProtectedPolymorphic(original_name)
         name = p.callProtectedName()
-        self.assert_(p.protectedName_called)
+        self.assertTrue(p.protectedName_called)
         self.assertEqual(p.protectedName(), name)
         self.assertEqual(ProtectedPolymorphic.protectedName(p), original_name)
 class ProtectedPolymorphicDaugherTest(unittest.TestCase):
@@ -139,7 +139,7 @@ class ProtectedPolymorphicDaugherTest(unittest.TestCase):
         original_name = 'Poly'
         p = ExtendedProtectedPolymorphicDaughter(original_name)
         name = p.callProtectedName()
-        self.assert_(p.protectedName_called)
+        self.assertTrue(p.protectedName_called)
         self.assertEqual(p.protectedName(), name)
         self.assertEqual(ProtectedPolymorphicDaughter.protectedName(p), original_name)
 
@@ -162,7 +162,7 @@ class ProtectedPolymorphicGrandDaugherTest(unittest.TestCase):
         original_name = 'Poly'
         p = ExtendedProtectedPolymorphicGrandDaughter(original_name)
         name = p.callProtectedName()
-        self.assert_(p.protectedName_called)
+        self.assertTrue(p.protectedName_called)
         self.assertEqual(p.protectedName(), name)
         self.assertEqual(ProtectedPolymorphicGrandDaughter.protectedName(p), original_name)
 
@@ -300,7 +300,23 @@ class ProtectedPropertyTest(unittest.TestCase):
         self.assertEqual(self.obj.protectedValueTypeProperty, point)
         self.assertFalse(self.obj.protectedValueTypeProperty is point)
         pointProperty = self.obj.protectedValueTypeProperty
-        self.assertFalse(self.obj.protectedValueTypeProperty is pointProperty)
+        self.assertTrue(self.obj.protectedValueTypeProperty is pointProperty)
+
+    def testProtectedValueTypePropertyWrapperRegistration(self):
+        '''Access colocated protected value type property.'''
+        cache_size = cacheSize()
+        point = Point(12, 34)
+        obj = createProtectedProperty()
+        obj.protectedValueTypeProperty
+        self.assertEqual(obj.protectedValueTypeProperty.copy(),
+                         obj.protectedValueTypeProperty)
+        obj.protectedValueTypeProperty = point
+        self.assertEqual(obj.protectedValueTypeProperty, point)
+        self.assertFalse(obj.protectedValueTypeProperty is point)
+        pointProperty = obj.protectedValueTypeProperty
+        self.assertTrue(obj.protectedValueTypeProperty is pointProperty)
+        del obj, point, pointProperty
+        self.assertEqual(cacheSize(), cache_size)
 
     def testProtectedValueTypePointerProperty(self):
         '''Writes and reads a protected value type pointer property.'''
@@ -309,7 +325,7 @@ class ProtectedPropertyTest(unittest.TestCase):
         self.obj.protectedValueTypePointerProperty = pt1
         self.assertEqual(self.obj.protectedValueTypePointerProperty, pt1)
         self.assertEqual(self.obj.protectedValueTypePointerProperty, pt2)
-        self.assert_(self.obj.protectedValueTypePointerProperty is pt1)
+        self.assertTrue(self.obj.protectedValueTypePointerProperty is pt1)
         self.assertFalse(self.obj.protectedValueTypePointerProperty is pt2)
 
     def testProtectedObjectTypeProperty(self):

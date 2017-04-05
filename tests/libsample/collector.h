@@ -42,15 +42,15 @@ public:
 
     void clear();
 
-    Collector& operator<<(unsigned long item);
+    Collector& operator<<(ObjectType::Identifier item);
 
     Collector& operator<<(const ObjectType *);
 
-    std::list<unsigned long> items();
+    std::list<ObjectType::Identifier> items();
     int size();
 
 private:
-    std::list<unsigned long> m_items;
+    std::list<ObjectType::Identifier> m_items;
 
     Collector(const Collector&);
     Collector& operator=(const Collector&);

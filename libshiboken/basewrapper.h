@@ -41,10 +41,9 @@
 #define BASEWRAPPER_H
 
 #include "sbkpython.h"
-#include "bindingmanager.h"
-#include <list>
+#include "shibokenmacros.h"
+
 #include <vector>
-#include <map>
 #include <string>
 
 extern "C"
@@ -251,6 +250,12 @@ LIBSHIBOKEN_API bool        isUserType(PyObject* pyObj);
  *  Generic function used to make ObjectType hashable, the C++ pointer is used as hash value.
  */
 LIBSHIBOKEN_API Py_hash_t   hash(PyObject* pyObj);
+
+/**
+ * Find a child of given wrapper having same address having the specified type.
+ */
+LIBSHIBOKEN_API SbkObject *findColocatedChild(SbkObject *wrapper,
+                                              const SbkObjectType *instanceType);
 
 /**
  *  Bind a C++ object to Python.

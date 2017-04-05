@@ -35,6 +35,7 @@ import sys
 import unittest
 
 from sample import *
+from py3kcompat import IS_PY3K, long
 
 class OverflowTest(unittest.TestCase):
     '''Test case for overflowing C++ numeric types.'''
@@ -61,7 +62,9 @@ class OverflowTest(unittest.TestCase):
         self.assertEqual(doubleUnsignedLongLong(val), 2 * val)
         val = long(100)
         self.assertEqual(doubleUnsignedLongLong(val), 2 * val)
-        val *= -1
+        val = -100
+        self.assertRaises(OverflowError, doubleUnsignedLongLong, val)
+        val = long(-200)
         self.assertRaises(OverflowError, doubleUnsignedLongLong, val)
 
     def testOverflow(self):

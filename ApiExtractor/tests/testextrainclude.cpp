@@ -29,22 +29,25 @@
 #include "testextrainclude.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestExtraInclude::testClassExtraInclude()
 {
-    const char* cppCode ="struct A {};";
+    const char* cppCode ="struct A {};\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <value-type name='A'> \
-            <extra-includes>\
-                <include file-name='header.h' location='global' />\
-            </extra-includes>\
-        </value-type>\
-    </typesystem>";
+    <typesystem package='Foo'>\n\
+        <value-type name='A'>\n\
+            <extra-includes>\n\
+                <include file-name='header.h' location='global'/>\n\
+            </extra-includes>\n\
+        </value-type>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
-    const AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
 
     QList<Include> includes = classA->typeEntry()->extraIncludes();
@@ -54,19 +57,20 @@ void TestExtraInclude::testClassExtraInclude()
 
 void TestExtraInclude::testGlobalExtraIncludes()
 {
-    const char* cppCode ="struct A {};";
+    const char* cppCode ="struct A {};\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <extra-includes>\
-            <include file-name='header1.h' location='global' />\
-            <include file-name='header2.h' location='global' />\
-        </extra-includes>\
-        <value-type name='A' />\
-    </typesystem>";
+    <typesystem package='Foo'>\n\
+        <extra-includes>\n\
+            <include file-name='header1.h' location='global'/>\n\
+            <include file-name='header2.h' location='global'/>\n\
+        </extra-includes>\n\
+        <value-type name='A'/>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
-    QVERIFY(classes.findClass(QLatin1String("A")));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    QVERIFY(AbstractMetaClass::findClass(classes, QLatin1String("A")));
 
     TypeDatabase* td = TypeDatabase::instance();
     TypeEntry* module = td->findType(QLatin1String("Foo"));

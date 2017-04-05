@@ -25,6 +25,7 @@
     <primitive-type name="long long"/>
     <primitive-type name="unsigned long long"/>
     <primitive-type name="std::string"/>
+    <primitive-type name="ObjectType::Identifier"/>
 
     <primitive-type name="Foo::HANDLE" target-lang-api-name="PyLong"/>
 
@@ -505,6 +506,10 @@
     <function signature="overloadedFunc(double)" />
     <function signature="overloadedFunc(int)" />
 
+    <value-type name="ClassWithFunctionPointer">
+        <suppress-warning text="skipping function 'ClassWithFunctionPointer::callFunctionPointer', unmatched parameter type 'void (*)(void*)'" />
+    </value-type>
+
     <enum-type name="OverloadedFuncEnum"/>
     <!-- BUG:
     renaming the ICOverloadedFuncEnum to the same name
@@ -872,6 +877,8 @@
     </object-type>
 
     <value-type name="ProtectedProperty" />
+
+    <function signature="createProtectedProperty()" />
 
     <template name="boolptr_at_end_fix_beginning">
     bool __ok__;
@@ -1879,7 +1886,7 @@
                 int pyH = PyDateTime_TIME_GET_HOUR(%1);
                 int pyM = PyDateTime_TIME_GET_MINUTE(%1);
                 int pyS = PyDateTime_TIME_GET_SECOND(%1);
-                if ((pyH == %CPPSELF.hour()) &amp;&ampl;
+                if ((pyH == %CPPSELF.hour()) &amp;&amp;
                     (pyM == %CPPSELF.minute()) &amp;&amp;
                     (pyS == %CPPSELF.second()))
                     %PYARG_0 = Py_False;
@@ -1896,7 +1903,7 @@
                 int pyH = PyDateTime_TIME_GET_HOUR(%1);
                 int pyM = PyDateTime_TIME_GET_MINUTE(%1);
                 int pyS = PyDateTime_TIME_GET_SECOND(%1);
-                if ((pyH == %CPPSELF.hour()) &amp;&ampl;
+                if ((pyH == %CPPSELF.hour()) &amp;&amp;
                     (pyM == %CPPSELF.minute()) &amp;&amp;
                     (pyS == %CPPSELF.second()))
                     %PYARG_0 = Py_True;

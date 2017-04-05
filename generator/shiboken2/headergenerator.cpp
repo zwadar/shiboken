@@ -27,6 +27,7 @@
 ****************************************************************************/
 
 #include "headergenerator.h"
+#include <abstractmetalang.h>
 #include <typedatabase.h>
 #include <reporthandler.h>
 #include <fileout.h>
@@ -37,11 +38,23 @@
 #include <QtCore/QRegExp>
 #include <QtCore/QDebug>
 
-QString HeaderGenerator::fileNameForClass(const AbstractMetaClass* metaClass) const
+QString HeaderGenerator::fileNamePrefix() const
 {
-    QString result = metaClass->qualifiedCppName().toLower();
-    result.replace(QLatin1String("::"), QLatin1String("_"));
-    return result + QLatin1String("_wrapper.h");
+    return QLatin1String("_wrapper.h");
+}
+
+QString HeaderGenerator::fileNameForContext(GeneratorContext &context) const
+{
+    const AbstractMetaClass *metaClass = context.metaClass();
+    if (!context.forSmartPointer()) {
+        QString fileNameBase = metaClass->qualifiedCppName().toLower();
+        fileNameBase.replace(QLatin1String("::"), QLatin1String("_"));
+        return fileNameBase + fileNamePrefix();
+    } else {
+        const AbstractMetaType *smartPointerType = context.preciseType();
+        QString fileNameBase = getFileNameBaseForSmartPointer(smartPointerType, metaClass);
+        return fileNameBase + fileNamePrefix();
+    }
 }
 
 void HeaderGenerator::writeCopyCtor(QTextStream& s, const AbstractMetaClass* metaClass) const
@@ -77,8 +90,9 @@ void HeaderGenerator::writeProtectedFieldAccessors(QTextStream& s, const Abstrac
       << " { " << fieldName << " = value; }" << endl;
 }
 
-void HeaderGenerator::generateClass(QTextStream& s, const AbstractMetaClass* metaClass)
+void HeaderGenerator::generateClass(QTextStream &s, GeneratorContext &classContext)
 {
+    AbstractMetaClass *metaClass = classContext.metaClass();
     if (ReportHandler::isDebug(ReportHandler::SparseDebug))
         qCDebug(lcShiboken) << "Generating header for " << metaClass->fullName();
     m_inheritedOverloads.clear();
@@ -87,8 +101,13 @@ void HeaderGenerator::generateClass(QTextStream& s, const AbstractMetaClass* met
     // write license comment
     s << licenseComment();
 
-    QString wrapperName = HeaderGenerator::wrapperName(metaClass);
-    QString headerGuard = wrapperName.replace(QLatin1String("::"), QLatin1String("_")).toUpper();
+    QString wrapperName;
+    if (!classContext.forSmartPointer()) {
+        wrapperName = HeaderGenerator::wrapperName(metaClass);
+    } else {
+        wrapperName = HeaderGenerator::wrapperName(classContext.preciseType());
+    }
+    QString headerGuard = getFilteredCppSignatureString(wrapperName).toUpper();
 
     // Header
     s << "#ifndef SBK_" << headerGuard << "_H" << endl;
@@ -136,7 +155,7 @@ void HeaderGenerator::generateClass(QTextStream& s, const AbstractMetaClass* met
             s << "~" << wrapperName << "();" << endl;
         }
 
-        writeCodeSnips(s, metaClass->typeEntry()->codeSnips(), CodeSnip::Declaration, TypeSystem::NativeCode);
+        writeCodeSnips(s, metaClass->typeEntry()->codeSnips(), TypeSystem::CodeSnipPositionDeclaration, TypeSystem::NativeCode);
 
         if ((!avoidProtectedHack() || !metaClass->hasPrivateDestructor())
             && usePySideExtensions() && metaClass->isQObject()) {
@@ -163,7 +182,7 @@ void HeaderGenerator::writeFunction(QTextStream& s, const AbstractMetaFunction* 
 {
 
     // do not write copy ctors here.
-    if (!func->isPrivate() && func->isCopyConstructor()) {
+    if (!func->isPrivate() && func->functionType() == AbstractMetaFunction::CopyConstructorFunction) {
         writeCopyCtor(s, func->ownerClass());
         return;
     }
@@ -251,7 +270,7 @@ void HeaderGenerator::writeTypeIndexDefineLine(QTextStream& s, const TypeEntry* 
     if (typeEntry->isComplex()) {
         const ComplexTypeEntry* cType = reinterpret_cast<const ComplexTypeEntry*>(typeEntry);
         if (cType->baseContainerType()) {
-            const AbstractMetaClass* metaClass = classes().findClass(cType);
+            const AbstractMetaClass *metaClass = AbstractMetaClass::findClass(classes(), cType);
             if (metaClass->templateBaseClass())
                 _writeTypeIndexDefineLine(s, getTypeIndexVariableName(metaClass, true), typeIndex);
         }
@@ -296,17 +315,35 @@ bool HeaderGenerator::finishGeneration()
         writeTypeIndexDefine(macrosStream, metaClass);
         lookForEnumsInClassesNotToBeGenerated(globalEnums, metaClass);
     }
+
     foreach (const AbstractMetaEnum* metaEnum, globalEnums)
         writeTypeIndexDefineLine(macrosStream, metaEnum->typeEntry());
+
+    // Write the smart pointer define indexes.
+    int smartPointerCountIndex = getMaxTypeIndex();
+    int smartPointerCount = 0;
+    foreach (const AbstractMetaType *metaType, instantiatedSmartPointers()) {
+        QString variableName = getTypeIndexVariableName(metaType);
+        macrosStream << "#define ";
+        macrosStream.setFieldWidth(60);
+        macrosStream << variableName;
+        macrosStream.setFieldWidth(0);
+        macrosStream << ' ' << smartPointerCountIndex << " // " << metaType->cppSignature()
+                     << endl;
+        ++smartPointerCountIndex;
+        ++smartPointerCount;
+    }
+
+
     macrosStream << "#define ";
     macrosStream.setFieldWidth(60);
     macrosStream << QLatin1String("SBK_") + moduleName() + QLatin1String("_IDX_COUNT");
     macrosStream.setFieldWidth(0);
-    macrosStream << ' ' << getMaxTypeIndex() << endl << endl;
+    macrosStream << ' ' << getMaxTypeIndex() + smartPointerCount << endl << endl;
     macrosStream << "// This variable stores all Python types exported by this module." << endl;
     macrosStream << "extern PyTypeObject** " << cppApiVariableName() << ';' << endl << endl;
     macrosStream << "// This variable stores all type converters exported by this module." << endl;
-    macrosStream << "extern SbkConverter** " << convertersVariableName() << ';' << endl << endl;;
+    macrosStream << "extern SbkConverter** " << convertersVariableName() << ';' << endl << endl;
 
     // TODO-CONVERTER ------------------------------------------------------------------------------
     // Using a counter would not do, a fix must be made to APIExtractor's getTypeIndex().
@@ -372,6 +409,12 @@ bool HeaderGenerator::finishGeneration()
 
         if (!metaClass->isNamespace())
             writeSbkTypeFunction(typeFunctions, metaClass);
+    }
+
+    foreach (const AbstractMetaType *metaType, instantiatedSmartPointers()) {
+        const TypeEntry *classType = metaType->typeEntry();
+        includes << classType->include();
+        writeSbkTypeFunction(typeFunctions, metaType);
     }
 
     QString moduleHeaderFileName(outputDirectory()
@@ -477,6 +520,12 @@ void HeaderGenerator::writeSbkTypeFunction(QTextStream& s, const AbstractMetaCla
 {
     s <<  "template<> inline PyTypeObject* SbkType< ::" << cppClass->qualifiedCppName() << " >() "
       <<  "{ return reinterpret_cast<PyTypeObject*>(" << cpythonTypeNameExt(cppClass->typeEntry()) << "); }\n";
+}
+
+void HeaderGenerator::writeSbkTypeFunction(QTextStream &s, const AbstractMetaType *metaType)
+{
+    s <<  "template<> inline PyTypeObject* SbkType< ::" << metaType->cppSignature() << " >() "
+      <<  "{ return reinterpret_cast<PyTypeObject*>(" << cpythonTypeNameExt(metaType) << "); }\n";
 }
 
 void HeaderGenerator::writeInheritedOverloads(QTextStream& s)

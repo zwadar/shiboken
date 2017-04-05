@@ -29,29 +29,32 @@
 #include "testresolvetype.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestResolveType::testResolveReturnTypeFromParentScope()
 {
-    const char* cppCode = "\
-    namespace A {\
-        struct B {\
-            struct C {};\
-        };\
-        struct D : public B::C {\
-            C* foo = 0;\
-            C* method();\
-        };\
+    const char* cppCode = "\n\
+    namespace A {\n\
+        struct B {\n\
+            struct C {};\n\
+        };\n\
+        struct D : public B::C {\n\
+            C* foo = 0;\n\
+            C* method();\n\
+        };\n\
     };";
-    const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <namespace-type name='A' />\
-        <value-type name='A::B' /> \
-        <value-type name='A::B::C' /> \
-        <value-type name='A::D' /> \
+    const char* xmlCode = "\n\
+    <typesystem package='Foo'>\n\
+        <namespace-type name='A'/>\n\
+        <value-type name='A::B'/>\n\
+        <value-type name='A::B::C'/>\n\
+        <value-type name='A::D'/>\n\
     </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classD = classes.findClass(QLatin1String("A::D"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *classD = AbstractMetaClass::findClass(classes, QLatin1String("A::D"));
     QVERIFY(classD);
     const AbstractMetaFunction* meth = classD->findFunction(QLatin1String("method"));
     QVERIFY(meth);

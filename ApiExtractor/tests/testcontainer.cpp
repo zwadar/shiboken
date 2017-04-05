@@ -29,31 +29,33 @@
 #include "testcontainer.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestContainer::testContainerType()
 {
     const char* cppCode ="\
-    namespace std {\
-    template<class T>\
-    class list { \
-        T get(int x) { return 0; }\
-    };\
-    }\
-    class A : public std::list<int> {\
-    };\
-    ";
+    namespace std {\n\
+    template<class T>\n\
+    class list {\n\
+        T get(int x) { return 0; }\n\
+    };\n\
+    }\n\
+    class A : public std::list<int> {\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <namespace-type name='std' generate='no' /> \
-        <container-type name='std::list' type='list' /> \
-        <object-type name='A'/> \
-    </typesystem>";
+    <typesystem package='Foo'>\n\
+        <namespace-type name='std' generate='no' />\n\
+        <container-type name='std::list' type='list' />\n\
+        <object-type name='A'/>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode, true);
-    AbstractMetaClassList classes = t.builder()->classes();
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, true));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.count(), 2);
     //search for class A
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    AbstractMetaClass* classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
     QVERIFY(classA->typeEntry()->baseContainerType());
     QCOMPARE(reinterpret_cast<const ContainerTypeEntry*>(classA->typeEntry()->baseContainerType())->type(), ContainerTypeEntry::ListContainer);
@@ -62,29 +64,29 @@ void TestContainer::testContainerType()
 void TestContainer::testListOfValueType()
 {
     const char* cppCode ="\
-    namespace std {\
-    template<class T>\
-    class list { \
-        T get(int x) { return 0; }\
-    };\
-    }\
-    class ValueType {};\
-    class A : public std::list<ValueType> {\
-    };\
-    ";
+    namespace std {\n\
+    template<class T>\n\
+    class list {\n\
+        T get(int x) { return 0; }\n\
+    };\n\
+    }\n\
+    class ValueType {};\n\
+    class A : public std::list<ValueType> {\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <namespace-type name='std' generate='no' /> \
-        <container-type name='std::list' type='list' /> \
-        <value-type name='ValueType'/> \
-        <value-type name='A'/> \
-    </typesystem>";
+    <typesystem package='Foo'>\n\
+        <namespace-type name='std' generate='no'/>\n\
+        <container-type name='std::list' type='list'/>\n\
+        <value-type name='ValueType'/>\n\
+        <value-type name='A'/>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode, true);
-    AbstractMetaClassList classes = t.builder()->classes();
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, true));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
     QCOMPARE(classes.count(), 3);
 
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
     QCOMPARE(classA->templateBaseClassInstantiations().count(), 1);
     const AbstractMetaType* templateInstanceType = classA->templateBaseClassInstantiations().first();
@@ -93,7 +95,7 @@ void TestContainer::testListOfValueType()
     QCOMPARE(templateInstanceType->indirections(), 0);
     QVERIFY(!templateInstanceType->typeEntry()->isObject());
     QVERIFY(templateInstanceType->typeEntry()->isValue());
-    QVERIFY(!templateInstanceType->isReference());
+    QCOMPARE(templateInstanceType->referenceType(), NoReference);
     QVERIFY(!templateInstanceType->isObject());
     QVERIFY(!templateInstanceType->isValuePointer());
     QVERIFY(templateInstanceType->isValue());

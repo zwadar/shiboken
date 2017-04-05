@@ -30,11 +30,23 @@
 #define APIEXTRACTOR_H
 
 #include "reporthandler.h"
-#include "abstractmetalang.h"
+#include "dependency.h"
+#include "abstractmetalang_typedefs.h"
 #include "apiextractormacros.h"
+#include "typesystem_typedefs.h"
 #include <QStringList>
 
 class AbstractMetaBuilder;
+class AbstractMetaClass;
+class AbstractMetaEnum;
+class AbstractMetaFunction;
+class AbstractMetaType;
+class ContainerTypeEntry;
+class EnumTypeEntry;
+class FlagsTypeEntry;
+class PrimitiveTypeEntry;
+class TypeEntry;
+
 QT_BEGIN_NAMESPACE
 class QDebug;
 class QIODevice;
@@ -59,14 +71,14 @@ public:
     void addIncludePath(const QStringList& paths);
     QStringList includePaths() const { return m_includePaths; }
     void setLogDirectory(const QString& logDir);
-    APIEXTRACTOR_DEPRECATED(void setApiVersion(double version));
-    void setApiVersion(const QString& package, const QByteArray& version);
+    bool setApiVersion(const QString& package, const QString& version);
     void setDropTypeEntries(QString dropEntries);
 
     AbstractMetaEnumList globalEnums() const;
     AbstractMetaFunctionList globalFunctions() const;
     AbstractMetaClassList classes() const;
-    AbstractMetaClassList classesTopologicalSorted() const;
+    AbstractMetaClassList smartPointers() const;
+    AbstractMetaClassList classesTopologicalSorted(const Dependencies &additionalDependencies = Dependencies()) const;
     PrimitiveTypeEntryList primitiveTypes() const;
     ContainerTypeEntryList containerTypes() const;
     QSet<QString> qtMetaTypeDeclaredTypeNames() const;
@@ -89,10 +101,9 @@ private:
     // disable copy
     ApiExtractor(const ApiExtractor&);
     ApiExtractor& operator=(const ApiExtractor&);
-};
-
 #ifndef QT_NO_DEBUG_STREAM
-QDebug operator<<(QDebug d, const ApiExtractor &ae);
+    friend QDebug operator<<(QDebug d, const ApiExtractor &ae);
 #endif
+};
 
 #endif // APIEXTRACTOR_H

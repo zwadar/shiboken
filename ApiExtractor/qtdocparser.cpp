@@ -27,8 +27,13 @@
 ****************************************************************************/
 
 #include "qtdocparser.h"
+#include "abstractmetalang.h"
 #include "reporthandler.h"
+#include "typesystem.h"
+
 #include <QtXmlPatterns/QXmlQuery>
+#include <QtCore/QDir>
+#include <QtCore/QFile>
 #include <QUrl>
 
 Documentation QtDocParser::retrieveModuleDocumentation()
@@ -111,9 +116,11 @@ void QtDocParser::fillDocumentation(AbstractMetaClass* metaClass)
                 if (arg->type()->isConstant())
                     type.prepend(QLatin1String("const "));
 
-                if (arg->type()->isReference()) {
+                if (arg->type()->referenceType() == LValueReference) {
                     type += QLatin1String(" &");
-                } if (arg->type()->indirections()) {
+                } else if (arg->type()->referenceType() == RValueReference) {
+                    type += QLatin1String(" &&");
+                } else if (arg->type()->indirections()) {
                     type += QLatin1Char(' ');
                     for (int j = 0, max = arg->type()->indirections(); j < max; ++j)
                         type += QLatin1Char('*');

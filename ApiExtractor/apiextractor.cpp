@@ -27,6 +27,8 @@
 ****************************************************************************/
 
 #include "apiextractor.h"
+#include "abstractmetalang.h"
+
 #include <QDir>
 #include <QDebug>
 #include <QTemporaryFile>
@@ -38,6 +40,7 @@
 #include "parser/rpp/pp.h"
 #include "abstractmetabuilder.h"
 #include "typedatabase.h"
+#include "typesystem.h"
 
 static bool preprocess(const QString& sourceFile,
                        QFile& targetFile,
@@ -110,14 +113,9 @@ void ApiExtractor::setSilent ( bool value )
     ReportHandler::setSilent(value);
 }
 
-void ApiExtractor::setApiVersion(double version)
+bool ApiExtractor::setApiVersion(const QString& package, const QString &version)
 {
-    TypeDatabase::instance()->setApiVersion(QLatin1String("*"), QByteArray::number(version));
-}
-
-void ApiExtractor::setApiVersion(const QString& package, const QByteArray& version)
-{
-    TypeDatabase::instance()->setApiVersion(package, version);
+    return TypeDatabase::instance()->setApiVersion(package, version);
 }
 
 void ApiExtractor::setDropTypeEntries(QString dropEntries)
@@ -145,10 +143,16 @@ AbstractMetaClassList ApiExtractor::classes() const
     return m_builder->classes();
 }
 
-AbstractMetaClassList ApiExtractor::classesTopologicalSorted() const
+AbstractMetaClassList ApiExtractor::smartPointers() const
 {
     Q_ASSERT(m_builder);
-    return m_builder->classesTopologicalSorted();
+    return m_builder->smartPointers();
+}
+
+AbstractMetaClassList ApiExtractor::classesTopologicalSorted(const Dependencies &additionalDependencies) const
+{
+    Q_ASSERT(m_builder);
+    return m_builder->classesTopologicalSorted(Q_NULLPTR, additionalDependencies);
 }
 
 PrimitiveTypeEntryList ApiExtractor::primitiveTypes() const
@@ -344,11 +348,8 @@ QDebug operator<<(QDebug d, const ApiExtractor &ae)
     d.noquote();
     d.nospace();
     d << "ApiExtractor(typeSystem=\"" << ae.typeSystem() << "\", cppFileName=\""
-      << ae.cppFileName() << ", classCount=" << ae.classCount();
-    debugFormatSequence(d, "qtMetaTypeDeclaredTypeNames", ae.qtMetaTypeDeclaredTypeNames());
-    debugFormatSequence(d, "globalEnums", ae.globalEnums());
-    debugFormatSequence(d, "globalFunctions", ae.globalFunctions());
-    debugFormatSequence(d, "classes", ae.classes());
+      << ae.cppFileName() << ", ";
+    ae.m_builder->formatDebug(d);
     d << ')';
     return d;
 }

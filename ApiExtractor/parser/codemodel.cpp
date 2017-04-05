@@ -30,57 +30,53 @@
 
 #include "codemodel.h"
 #include <algorithm>
+#include <functional>
 #include <iostream>
+#include <QDebug>
+#include <QDir>
+
+// Predicate to find an item by name in a list of QSharedPointer<Item>
+template <class T> class ModelItemNamePredicate : public std::unary_function<bool, QSharedPointer<T> >
+{
+public:
+    explicit ModelItemNamePredicate(const QString &name) : m_name(name) {}
+    bool operator()(const QSharedPointer<T> &item) const { return item->name() == m_name; }
+
+private:
+    const QString m_name;
+};
+
+template <class T>
+static QSharedPointer<T> findModelItem(const QList<QSharedPointer<T> > &list, const QString &name)
+{
+    typedef typename QList<QSharedPointer<T> >::const_iterator It;
+    const It it = std::find_if(list.begin(), list.end(), ModelItemNamePredicate<T>(name));
+    return it != list.end() ? *it : QSharedPointer<T>();
+}
 
 // ---------------------------------------------------------------------------
-CodeModel::CodeModel()
-        : _M_creation_id(0)
+
+CodeModel::CodeModel() : m_globalNamespace(new _NamespaceModelItem(this))
 {
-    _M_globalNamespace = create<NamespaceModelItem>();
 }
 
 CodeModel::~CodeModel()
 {
 }
 
-void CodeModel::wipeout()
-{
-    _M_globalNamespace = create<NamespaceModelItem>();
-    _M_files.clear();
-}
-
-FileList CodeModel::files() const
-{
-    return _M_files.values();
-}
-
 NamespaceModelItem CodeModel::globalNamespace() const
 {
-    return _M_globalNamespace;
+    return m_globalNamespace;
 }
 
 void CodeModel::addFile(FileModelItem item)
 {
-    _M_creation_id = 0; // reset the creation id
-    _M_files.insert(item->name(), item);
-}
-
-void CodeModel::removeFile(FileModelItem item)
-{
-    QHash<QString, FileModelItem>::Iterator it = _M_files.find(item->name());
-
-    if (it != _M_files.end() && it.value() == item)
-        _M_files.erase(it);
+    m_files.append(item);
 }
 
 FileModelItem CodeModel::findFile(const QString &name) const
 {
-    return _M_files.value(name);
-}
-
-QHash<QString, FileModelItem> CodeModel::fileMap() const
-{
-    return _M_files;
+    return findModelItem(m_files, name);
 }
 
 CodeModelItem CodeModel::findItem(const QStringList &qualifiedName, CodeModelItem scope) const
@@ -89,22 +85,22 @@ CodeModelItem CodeModel::findItem(const QStringList &qualifiedName, CodeModelIte
         // ### Extend to look for members etc too.
         const QString &name = qualifiedName.at(i);
 
-        if (NamespaceModelItem ns = model_dynamic_cast<NamespaceModelItem>(scope)) {
+        if (NamespaceModelItem ns = qSharedPointerDynamicCast<_NamespaceModelItem>(scope)) {
             if (NamespaceModelItem tmp_ns = ns->findNamespace(name)) {
                 scope = tmp_ns;
                 continue;
             }
         }
 
-        if (ScopeModelItem ss = model_dynamic_cast<ScopeModelItem>(scope)) {
+        if (ScopeModelItem ss = qSharedPointerDynamicCast<_ScopeModelItem>(scope)) {
             if (ClassModelItem cs = ss->findClass(name)) {
                 scope = cs;
             } else if (EnumModelItem es = ss->findEnum(name)) {
                 if (i == qualifiedName.size() - 1)
-                    return es->toItem();
-            } else if (TypeAliasModelItem tp = ss->findTypeAlias(name)) {
+                    return es;
+            } else if (TypeDefModelItem tp = ss->findTypeDef(name)) {
                 if (i == qualifiedName.size() - 1)
-                    return tp->toItem();
+                    return tp;
             } else {
                 // If we don't find the name in the scope chain we
                 // need to return an empty item to indicate failure...
@@ -116,6 +112,24 @@ CodeModelItem CodeModel::findItem(const QStringList &qualifiedName, CodeModelIte
     return scope;
 }
 
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const CodeModel *m)
+{
+    QDebugStateSaver s(d);
+    d.noquote();
+    d.nospace();
+    d << "CodeModel(";
+    if (m) {
+        const NamespaceModelItem globalNamespaceP = m->globalNamespace();
+        if (globalNamespaceP.data())
+            globalNamespaceP->formatDebug(d);
+    } else {
+        d << '0';
+    }
+    d << ')';
+    return d;
+}
+#endif // !QT_NO_DEBUG_STREAM
 
 // ---------------------------------------------------------------------------
 TypeInfo TypeInfo::combine(const TypeInfo &__lhs, const TypeInfo &__rhs)
@@ -124,7 +138,8 @@ TypeInfo TypeInfo::combine(const TypeInfo &__lhs, const TypeInfo &__rhs)
 
     __result.setConstant(__result.isConstant() || __rhs.isConstant());
     __result.setVolatile(__result.isVolatile() || __rhs.isVolatile());
-    __result.setReference(__result.isReference() || __rhs.isReference());
+    if (__rhs.referenceType() > __result.referenceType())
+        __result.setReferenceType(__rhs.referenceType());
     __result.setIndirections(__result.indirections() + __rhs.indirections());
     __result.setArrayElements(__result.arrayElements() + __rhs.arrayElements());
 
@@ -151,14 +166,14 @@ TypeInfo TypeInfo::resolveType(CodeModelItem __item, TypeInfo const &__type, Cod
         otherType.setQualifiedName(__item->qualifiedName());
     }
 
-    if (TypeAliasModelItem __alias = model_dynamic_cast<TypeAliasModelItem> (__item)) {
-        const TypeInfo combined = TypeInfo::combine(__alias->type(), otherType);
+    if (TypeDefModelItem __typedef = qSharedPointerDynamicCast<_TypeDefModelItem>(__item)) {
+        const TypeInfo combined = TypeInfo::combine(__typedef->type(), otherType);
         const CodeModelItem nextItem = __scope->model()->findItem(combined.qualifiedName(), __scope);
         if (!nextItem)
             return combined;
         // PYSIDE-362, prevent recursion on opaque structs like
         // typedef struct xcb_connection_t xcb_connection_t;
-        if (nextItem.constData() ==__item.constData()) {
+        if (nextItem.data() ==__item.data()) {
             std::cerr << "** WARNING Bailing out recursion of " << __FUNCTION__
                 << "() on " << qPrintable(__type.qualifiedName().join(QLatin1String("::")))
                 << std::endl;
@@ -184,8 +199,16 @@ QString TypeInfo::toString() const
     if (indirections())
         tmp += QString(indirections(), QLatin1Char('*'));
 
-    if (isReference())
+    switch (referenceType()) {
+    case NoReference:
+        break;
+    case LValueReference:
         tmp += QLatin1Char('&');
+        break;
+    case RValueReference:
+        tmp += QLatin1String("&&");
+        break;
+    }
 
     if (isFunctionPointer()) {
         tmp += QLatin1String(" (*)(");
@@ -227,15 +250,89 @@ bool TypeInfo::operator==(const TypeInfo &other)
            && (!m_functionPointer || m_arguments == other.m_arguments);
 }
 
+#ifndef QT_NO_DEBUG_STREAM
+template <class It>
+void formatSequence(QDebug &d, It i1, It i2, const char *separator=", ")
+{
+    for (It i = i1; i != i2; ++i) {
+        if (i != i1)
+            d << separator;
+        d << *i;
+    }
+}
+
+void TypeInfo::formatDebug(QDebug &d) const
+{
+    d << '"';
+    formatSequence(d, m_qualifiedName.begin(), m_qualifiedName.end(), "\", \"");
+    d << '"';
+    if (m_constant)
+        d << ", [const]";
+    if (m_volatile)
+        d << ", [volatile]";
+    if (m_indirections)
+        d << ", indirections=" << m_indirections;
+    switch (m_referenceType) {
+    case NoReference:
+        break;
+    case LValueReference:
+        d << ", [ref]";
+        break;
+    case RValueReference:
+        d << ", [rvalref]";
+        break;
+    }
+    if (m_functionPointer) {
+        d << ", function ptr(";
+        formatSequence(d, m_arguments.begin(), m_arguments.end());
+        d << ')';
+    }
+    if (!m_arrayElements.isEmpty()) {
+        d << ", array[" << m_arrayElements.size() << "][";
+        formatSequence(d, m_arrayElements.begin(), m_arrayElements.end());
+        d << ']';
+    }
+}
+
+QDebug operator<<(QDebug d, const TypeInfo &t)
+{
+    QDebugStateSaver s(d);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+    const int verbosity = d.verbosity();
+#else
+    const int verbosity = 0;
+#endif
+    d.noquote();
+    d.nospace();
+    d << "TypeInfo(";
+    if (verbosity > 2)
+        t.formatDebug(d);
+    else
+        d << t.toString();
+    d << ')';
+    return d;
+}
+#endif // !QT_NO_DEBUG_STREAM
+
 // ---------------------------------------------------------------------------
 _CodeModelItem::_CodeModelItem(CodeModel *model, int kind)
-        : _M_model(model),
-        _M_kind(kind),
-        _M_startLine(0),
-        _M_startColumn(0),
-        _M_endLine(0),
-        _M_endColumn(0),
-        _M_creation_id(0)
+        : m_model(model),
+        m_kind(kind),
+        m_startLine(0),
+        m_startColumn(0),
+        m_endLine(0),
+        m_endColumn(0)
+{
+}
+
+_CodeModelItem::_CodeModelItem(CodeModel *model, const QString &name, int kind)
+    : m_model(model),
+    m_kind(kind),
+    m_startLine(0),
+    m_startColumn(0),
+    m_endLine(0),
+    m_endColumn(0),
+    m_name(name)
 {
 }
 
@@ -243,19 +340,9 @@ _CodeModelItem::~_CodeModelItem()
 {
 }
 
-CodeModelItem _CodeModelItem::toItem() const
-{
-    return CodeModelItem(const_cast<_CodeModelItem*>(this));
-}
-
 int _CodeModelItem::kind() const
 {
-    return _M_kind;
-}
-
-void _CodeModelItem::setKind(int kind)
-{
-    _M_kind = kind;
+    return m_kind;
 }
 
 QStringList _CodeModelItem::qualifiedName() const
@@ -270,32 +357,32 @@ QStringList _CodeModelItem::qualifiedName() const
 
 QString _CodeModelItem::name() const
 {
-    return _M_name;
+    return m_name;
 }
 
 void _CodeModelItem::setName(const QString &name)
 {
-    _M_name = name;
+    m_name = name;
 }
 
 QStringList _CodeModelItem::scope() const
 {
-    return _M_scope;
+    return m_scope;
 }
 
 void _CodeModelItem::setScope(const QStringList &scope)
 {
-    _M_scope = scope;
+    m_scope = scope;
 }
 
 QString _CodeModelItem::fileName() const
 {
-    return _M_fileName;
+    return m_fileName;
 }
 
 void _CodeModelItem::setFileName(const QString &fileName)
 {
-    _M_fileName = fileName;
+    m_fileName = fileName;
 }
 
 FileModelItem _CodeModelItem::file() const
@@ -305,307 +392,417 @@ FileModelItem _CodeModelItem::file() const
 
 void _CodeModelItem::getStartPosition(int *line, int *column)
 {
-    *line = _M_startLine;
-    *column = _M_startColumn;
+    *line = m_startLine;
+    *column = m_startColumn;
 }
 
 void _CodeModelItem::setStartPosition(int line, int column)
 {
-    _M_startLine = line;
-    _M_startColumn = column;
+    m_startLine = line;
+    m_startColumn = column;
 }
 
 void _CodeModelItem::getEndPosition(int *line, int *column)
 {
-    *line = _M_endLine;
-    *column = _M_endColumn;
+    *line = m_endLine;
+    *column = m_endColumn;
 }
 
 void _CodeModelItem::setEndPosition(int line, int column)
 {
-    _M_endLine = line;
-    _M_endColumn = column;
+    m_endLine = line;
+    m_endColumn = column;
 }
 
+#ifndef QT_NO_DEBUG_STREAM
+template <class It>
+static void formatPtrSequence(QDebug &d, It i1, It i2, const char *separator=", ")
+{
+    for (It i = i1; i != i2; ++i) {
+        if (i != i1)
+            d << separator;
+        d << i->data();
+    }
+}
+
+void _CodeModelItem::formatKind(QDebug &d, int k)
+{
+    switch (k) {
+    case Kind_Argument:
+        d << "ArgumentModelItem";
+        break;
+    case Kind_Class:
+        d << "ClassModelItem";
+        break;
+    case Kind_Enum:
+        d << "EnumModelItem";
+        break;
+    case Kind_Enumerator:
+        d << "EnumeratorModelItem";
+        break;
+    case Kind_File:
+        d << "FileModelItem";
+        break;
+    case Kind_Function:
+        d << "FunctionModelItem";
+        break;
+    case Kind_Member:
+        d << "MemberModelItem";
+        break;
+    case Kind_Namespace:
+        d << "NamespaceModelItem";
+        break;
+    case Kind_Variable:
+        d << "VariableModelItem";
+        break;
+    case Kind_Scope:
+        d << "ScopeModelItem";
+        break;
+    case Kind_TemplateParameter:
+        d << "TemplateParameter";
+        break;
+    case Kind_TypeDef:
+        d << "TypeDefModelItem";
+        break;
+    default:
+        d << "CodeModelItem";
+        break;
+    }
+}
+
+void _CodeModelItem::formatDebug(QDebug &d) const
+{
+     d << "(\"" << name() << '"';
+     if (!m_scope.isEmpty()) {
+         d << ", scope=";
+         formatSequence(d, m_scope.cbegin(), m_scope.cend(), "::");
+     }
+     if (!m_fileName.isEmpty()) {
+         d << ", file=\"" << QDir::toNativeSeparators(m_fileName);
+         if (m_startLine > 0)
+              d << ':' << m_startLine;
+         d << '"';
+     }
+}
+
+QDebug operator<<(QDebug d, const _CodeModelItem *t)
+{
+    QDebugStateSaver s(d);
+    d.noquote();
+    d.nospace();
+    if (!t) {
+        d << "CodeModelItem(0)";
+        return d;
+    }
+    _CodeModelItem::formatKind(d, t->kind());
+    t->formatDebug(d);
+    switch (t->kind()) {
+    case  _CodeModelItem::Kind_Class:
+        d << " /* class " << t->name() << " */";
+        break;
+    case  _CodeModelItem::Kind_Namespace:
+        d << " /* namespace " << t->name() << " */";
+        break;
+    }
+    d << ')';
+    return d;
+}
+#endif // !QT_NO_DEBUG_STREAM
+
 // ---------------------------------------------------------------------------
+_ClassModelItem::~_ClassModelItem()
+{
+}
+
 QStringList _ClassModelItem::baseClasses() const
 {
-    return _M_baseClasses;
+    return m_baseClasses;
 }
 
 void _ClassModelItem::setBaseClasses(const QStringList &baseClasses)
 {
-    _M_baseClasses = baseClasses;
+    m_baseClasses = baseClasses;
 }
 
 TemplateParameterList _ClassModelItem::templateParameters() const
 {
-    return _M_templateParameters;
+    return m_templateParameters;
 }
 
 void _ClassModelItem::setTemplateParameters(const TemplateParameterList &templateParameters)
 {
-    _M_templateParameters = templateParameters;
+    m_templateParameters = templateParameters;
 }
 
 void _ClassModelItem::addBaseClass(const QString &baseClass)
 {
-    _M_baseClasses.append(baseClass);
-}
-
-void _ClassModelItem::removeBaseClass(const QString &baseClass)
-{
-    _M_baseClasses.removeAt(_M_baseClasses.indexOf(baseClass));
+    m_baseClasses.append(baseClass);
 }
 
 bool _ClassModelItem::extendsClass(const QString &name) const
 {
-    return _M_baseClasses.contains(name);
+    return m_baseClasses.contains(name);
 }
 
 void _ClassModelItem::setClassType(CodeModel::ClassType type)
 {
-    _M_classType = type;
+    m_classType = type;
 }
 
 CodeModel::ClassType _ClassModelItem::classType() const
 {
-    return _M_classType;
+    return m_classType;
 }
 
 void _ClassModelItem::addPropertyDeclaration(const QString &propertyDeclaration)
 {
-    _M_propertyDeclarations << propertyDeclaration;
+    m_propertyDeclarations << propertyDeclaration;
 }
 
+#ifndef QT_NO_DEBUG_STREAM
+template <class List>
+static void formatModelItemList(QDebug &d, const char *prefix, const List &l,
+                                const char *separator = ", ")
+{
+    if (const int size = l.size()) {
+        d << prefix << '[' << size << "](";
+        for (int i = 0; i < size; ++i) {
+            if (i)
+                d << separator;
+            l.at(i)->formatDebug(d);
+        }
+        d << ')';
+    }
+}
+
+void _ClassModelItem::formatDebug(QDebug &d) const
+{
+    _CodeModelItem::formatDebug(d);
+    if (!m_baseClasses.isEmpty())
+        d << ", inherits=" << m_baseClasses;
+    formatModelItemList(d, ", templateParameters=", m_templateParameters);
+    formatScopeItemsDebug(d);
+}
+#endif // !QT_NO_DEBUG_STREAM
 
 // ---------------------------------------------------------------------------
 FunctionModelItem _ScopeModelItem::declaredFunction(FunctionModelItem item)
 {
-    FunctionList function_list = findFunctions(item->name());
-
-    foreach(FunctionModelItem fun, function_list) {
-        if (fun->isSimilar(item))
+    foreach (const FunctionModelItem &fun, m_functions) {
+        if (fun->name() == item->name() && fun->isSimilar(item))
             return fun;
-    }
 
+    }
     return FunctionModelItem();
 }
 
-ClassList _ScopeModelItem::classes() const
+_ScopeModelItem::~_ScopeModelItem()
 {
-    ClassList result = _M_classes.values();
-    qSort(result);
-    ClassList::iterator it = std::unique(result.begin(), result.end());
-    result.erase(it, result.end());
-    return result;
-}
-
-TypeAliasList _ScopeModelItem::typeAliases() const
-{
-    return _M_typeAliases.values();
-}
-
-VariableList _ScopeModelItem::variables() const
-{
-    return _M_variables.values();
-}
-
-FunctionList _ScopeModelItem::functions() const
-{
-    return _M_functions.values();
 }
 
 void _ScopeModelItem::addEnumsDeclaration(const QString &enumsDeclaration)
 {
-    _M_enumsDeclarations << enumsDeclaration;
-}
-
-FunctionDefinitionList _ScopeModelItem::functionDefinitions() const
-{
-    return _M_functionDefinitions.values();
-}
-
-EnumList _ScopeModelItem::enums() const
-{
-    EnumList result;
-    foreach (const QString& name, _M_enumNames)
-        result.append(_M_enums.value(name));
-    return result;
+    m_enumsDeclarations << enumsDeclaration;
 }
 
 void _ScopeModelItem::addClass(ClassModelItem item)
 {
-    QString name = item->name();
-    int idx = name.indexOf(QLatin1Char('<'));
-    if (idx > 0)
-        _M_classes.insert(name.left(idx), item);
-    _M_classes.insert(name, item);
+    m_classes.append(item);
 }
 
 void _ScopeModelItem::addFunction(FunctionModelItem item)
 {
-    _M_functions.insert(item->name(), item);
-}
-
-void _ScopeModelItem::addFunctionDefinition(FunctionDefinitionModelItem item)
-{
-    _M_functionDefinitions.insert(item->name(), item);
+    m_functions.append(item);
 }
 
 void _ScopeModelItem::addVariable(VariableModelItem item)
 {
-    _M_variables.insert(item->name(), item);
+    m_variables.append(item);
 }
 
-void _ScopeModelItem::addTypeAlias(TypeAliasModelItem item)
+void _ScopeModelItem::addTypeDef(TypeDefModelItem item)
 {
-    _M_typeAliases.insert(item->name(), item);
+    m_typeDefs.append(item);
 }
 
 void _ScopeModelItem::addEnum(EnumModelItem item)
 {
-    _M_enumNames.removeOne(item->name());
-    _M_enums.insert(item->name(), item);
-    _M_enumNames.append(item->name());
+    m_enums.append(item);
 }
 
-void _ScopeModelItem::removeClass(ClassModelItem item)
+#ifndef QT_NO_DEBUG_STREAM
+template <class Hash>
+static void formatScopeHash(QDebug &d, const char *prefix, const Hash &h,
+                            const char *separator = ", ",
+                            bool trailingNewLine = false)
 {
-    QHash<QString, ClassModelItem>::Iterator it = _M_classes.find(item->name());
-
-    if (it != _M_classes.end() && it.value() == item)
-        _M_classes.erase(it);
-}
-
-void _ScopeModelItem::removeFunction(FunctionModelItem item)
-{
-    QMultiHash<QString, FunctionModelItem>::Iterator it = _M_functions.find(item->name());
-
-    while (it != _M_functions.end() && it.key() == item->name()
-           && it.value() != item) {
-        ++it;
-    }
-
-    if (it != _M_functions.end() && it.value() == item) {
-        _M_functions.erase(it);
+    typedef typename Hash::ConstIterator HashIterator;
+    if (!h.isEmpty()) {
+        d << prefix << '[' << h.size() << "](";
+        const HashIterator begin = h.begin();
+        const HashIterator end = h.end();
+        for (HashIterator it = begin; it != end; ++it) { // Omit the names as they are repeated
+            if (it != begin)
+                d << separator;
+            d << it.value().data();
+        }
+        d << ')';
+        if (trailingNewLine)
+            d << '\n';
     }
 }
 
-void _ScopeModelItem::removeFunctionDefinition(FunctionDefinitionModelItem item)
+template <class List>
+static void formatScopeList(QDebug &d, const char *prefix, const List &l,
+                            const char *separator = ", ",
+                            bool trailingNewLine = false)
 {
-    QMultiHash<QString, FunctionDefinitionModelItem>::Iterator it = _M_functionDefinitions.find(item->name());
-
-    while (it != _M_functionDefinitions.end() && it.key() == item->name()
-           && it.value() != item) {
-        ++it;
-    }
-
-    if (it != _M_functionDefinitions.end() && it.value() == item) {
-        _M_functionDefinitions.erase(it);
-    }
-}
-
-void _ScopeModelItem::removeVariable(VariableModelItem item)
-{
-    QHash<QString, VariableModelItem>::Iterator it = _M_variables.find(item->name());
-
-    if (it != _M_variables.end() && it.value() == item)
-        _M_variables.erase(it);
-}
-
-void _ScopeModelItem::removeTypeAlias(TypeAliasModelItem item)
-{
-    QHash<QString, TypeAliasModelItem>::Iterator it = _M_typeAliases.find(item->name());
-
-    if (it != _M_typeAliases.end() && it.value() == item)
-        _M_typeAliases.erase(it);
-}
-
-void _ScopeModelItem::removeEnum(EnumModelItem item)
-{
-    QHash<QString, EnumModelItem>::Iterator it = _M_enums.find(item->name());
-
-    if (it != _M_enums.end() && it.value() == item) {
-        _M_enumNames.removeOne(item->name());
-        _M_enums.erase(it);
+    if (!l.isEmpty()) {
+        d << prefix << '[' << l.size() << "](";
+        formatPtrSequence(d, l.begin(), l.end(), separator);
+        d << ')';
+        if (trailingNewLine)
+            d << '\n';
     }
 }
+
+void _ScopeModelItem::formatScopeItemsDebug(QDebug &d) const
+{
+    formatScopeList(d, ", classes=", m_classes, "\n", true);
+    formatScopeList(d, ", enums=", m_enums, "\n", true);
+    formatScopeList(d, ", aliases=", m_typeDefs, "\n", true);
+    formatScopeList(d, ", functions=", m_functions, "\n", true);
+    formatScopeList(d, ", variables=", m_variables);
+}
+
+void  _ScopeModelItem::formatDebug(QDebug &d) const
+{
+    _CodeModelItem::formatDebug(d);
+    formatScopeItemsDebug(d);
+}
+#endif // !QT_NO_DEBUG_STREAM
+
+namespace {
+// Predicate to match a non-template class name against the class list.
+// "Vector" should match "Vector" as well as "Vector<T>" (as seen for methods
+// from within the class "Vector").
+class ClassNamePredicate : public std::unary_function<bool, ClassModelItem>
+{
+public:
+    explicit ClassNamePredicate(const QString &name) : m_name(name) {}
+    bool operator()(const ClassModelItem &item) const
+    {
+        const QString &itemName = item->name();
+        if (!itemName.startsWith(m_name))
+            return false;
+        return itemName.size() == m_name.size() || itemName.at(m_name.size()) == QLatin1Char('<');
+    }
+
+private:
+    const QString m_name;
+};
+} // namespace
 
 ClassModelItem _ScopeModelItem::findClass(const QString &name) const
 {
-    return _M_classes.value(name);
+    // A fully qualified template is matched by name only
+    const ClassList::const_iterator it = name.contains(QLatin1Char('<'))
+        ? std::find_if(m_classes.begin(), m_classes.end(), ModelItemNamePredicate<_ClassModelItem>(name))
+        : std::find_if(m_classes.begin(), m_classes.end(), ClassNamePredicate(name));
+    return it != m_classes.end() ? *it : ClassModelItem();
 }
 
 VariableModelItem _ScopeModelItem::findVariable(const QString &name) const
 {
-    return _M_variables.value(name);
+    return findModelItem(m_variables, name);
 }
 
-TypeAliasModelItem _ScopeModelItem::findTypeAlias(const QString &name) const
+TypeDefModelItem _ScopeModelItem::findTypeDef(const QString &name) const
 {
-    return _M_typeAliases.value(name);
+    return findModelItem(m_typeDefs, name);
 }
 
 EnumModelItem _ScopeModelItem::findEnum(const QString &name) const
 {
-    return _M_enums.value(name);
+    return findModelItem(m_enums, name);
 }
 
 FunctionList _ScopeModelItem::findFunctions(const QString &name) const
 {
-    return _M_functions.values(name);
-}
-
-FunctionDefinitionList _ScopeModelItem::findFunctionDefinitions(const QString &name) const
-{
-    return _M_functionDefinitions.values(name);
+    FunctionList result;
+    foreach (const FunctionModelItem &func, m_functions) {
+        if (func->name() == name)
+            result.append(func);
+    }
+    return result;
 }
 
 // ---------------------------------------------------------------------------
-NamespaceList _NamespaceModelItem::namespaces() const
+_NamespaceModelItem::~_NamespaceModelItem()
 {
-    return _M_namespaces.values();
 }
+
 void _NamespaceModelItem::addNamespace(NamespaceModelItem item)
 {
-    _M_namespaces.insert(item->name(), item);
-}
-void _NamespaceModelItem::removeNamespace(NamespaceModelItem item)
-{
-    QHash<QString, NamespaceModelItem>::Iterator it = _M_namespaces.find(item->name());
-
-    if (it != _M_namespaces.end() && it.value() == item)
-        _M_namespaces.erase(it);
+    m_namespaces.append(item);
 }
 
 NamespaceModelItem _NamespaceModelItem::findNamespace(const QString &name) const
 {
-    return _M_namespaces.value(name);
+    return findModelItem(m_namespaces, name);
 }
 
+_FileModelItem::~_FileModelItem()
+{
+}
+
+#ifndef QT_NO_DEBUG_STREAM
+void _NamespaceModelItem::formatDebug(QDebug &d) const
+{
+    _ScopeModelItem::formatDebug(d);
+    formatScopeList(d, ", namespaces=", m_namespaces);
+}
+#endif // !QT_NO_DEBUG_STREAM
+
 // ---------------------------------------------------------------------------
+_ArgumentModelItem::~_ArgumentModelItem()
+{
+}
+
 TypeInfo _ArgumentModelItem::type() const
 {
-    return _M_type;
+    return m_type;
 }
 
 void _ArgumentModelItem::setType(const TypeInfo &type)
 {
-    _M_type = type;
+    m_type = type;
 }
 
 bool _ArgumentModelItem::defaultValue() const
 {
-    return _M_defaultValue;
+    return m_defaultValue;
 }
 
 void _ArgumentModelItem::setDefaultValue(bool defaultValue)
 {
-    _M_defaultValue = defaultValue;
+    m_defaultValue = defaultValue;
 }
 
+#ifndef QT_NO_DEBUG_STREAM
+void _ArgumentModelItem::formatDebug(QDebug &d) const
+{
+    _CodeModelItem::formatDebug(d);
+    d << ", type=" << m_type;
+    if (m_defaultValue)
+        d << ", defaultValue=\"" << m_defaultValueExpression << '"';
+}
+#endif // !QT_NO_DEBUG_STREAM
 // ---------------------------------------------------------------------------
+_FunctionModelItem::~_FunctionModelItem()
+{
+}
+
 bool _FunctionModelItem::isSimilar(FunctionModelItem other) const
 {
     if (name() != other->name())
@@ -635,342 +832,368 @@ bool _FunctionModelItem::isSimilar(FunctionModelItem other) const
 
 ArgumentList _FunctionModelItem::arguments() const
 {
-    return _M_arguments;
+    return m_arguments;
 }
 
 void _FunctionModelItem::addArgument(ArgumentModelItem item)
 {
-    _M_arguments.append(item);
-}
-
-void _FunctionModelItem::removeArgument(ArgumentModelItem item)
-{
-    _M_arguments.removeAt(_M_arguments.indexOf(item));
+    m_arguments.append(item);
 }
 
 CodeModel::FunctionType _FunctionModelItem::functionType() const
 {
-    return _M_functionType;
+    return m_functionType;
 }
 
 void _FunctionModelItem::setFunctionType(CodeModel::FunctionType functionType)
 {
-    _M_functionType = functionType;
+    m_functionType = functionType;
 }
 
 bool _FunctionModelItem::isVariadics() const
 {
-    return _M_isVariadics;
+    return m_isVariadics;
 }
 
 void _FunctionModelItem::setVariadics(bool isVariadics)
 {
-    _M_isVariadics = isVariadics;
+    m_isVariadics = isVariadics;
 }
 
 bool _FunctionModelItem::isVirtual() const
 {
-    return _M_isVirtual;
+    return m_isVirtual;
 }
 
 void _FunctionModelItem::setVirtual(bool isVirtual)
 {
-    _M_isVirtual = isVirtual;
+    m_isVirtual = isVirtual;
 }
 
 bool _FunctionModelItem::isInline() const
 {
-    return _M_isInline;
+    return m_isInline;
 }
 
 void _FunctionModelItem::setInline(bool isInline)
 {
-    _M_isInline = isInline;
+    m_isInline = isInline;
 }
 
 bool _FunctionModelItem::isExplicit() const
 {
-    return _M_isExplicit;
+    return m_isExplicit;
 }
 
 void _FunctionModelItem::setExplicit(bool isExplicit)
 {
-    _M_isExplicit = isExplicit;
+    m_isExplicit = isExplicit;
 }
 
 bool _FunctionModelItem::isAbstract() const
 {
-    return _M_isAbstract;
+    return m_isAbstract;
 }
 
 void _FunctionModelItem::setAbstract(bool isAbstract)
 {
-    _M_isAbstract = isAbstract;
+    m_isAbstract = isAbstract;
 }
 
 // Qt
 bool _FunctionModelItem::isInvokable() const
 {
-    return _M_isInvokable;
+    return m_isInvokable;
 }
 
 void _FunctionModelItem::setInvokable(bool isInvokable)
 {
-    _M_isInvokable = isInvokable;
+    m_isInvokable = isInvokable;
 }
+
+#ifndef QT_NO_DEBUG_STREAM
+void _FunctionModelItem::formatDebug(QDebug &d) const
+{
+    _MemberModelItem::formatDebug(d);
+    d << ", type=" << m_functionType;
+    if (m_isInline)
+        d << " [inline]";
+    if (m_isAbstract)
+        d << " [abstract]";
+    if (m_isExplicit)
+        d << " [explicit]";
+    if (m_isInvokable)
+        d << " [invokable]";
+    formatModelItemList(d, ", arguments=", m_arguments);
+    if (m_isVariadics)
+        d << ",...";
+}
+#endif // !QT_NO_DEBUG_STREAM
 
 // ---------------------------------------------------------------------------
-TypeInfo _TypeAliasModelItem::type() const
+TypeInfo _TypeDefModelItem::type() const
 {
-    return _M_type;
+    return m_type;
 }
 
-void _TypeAliasModelItem::setType(const TypeInfo &type)
+void _TypeDefModelItem::setType(const TypeInfo &type)
 {
-    _M_type = type;
+    m_type = type;
 }
+
+#ifndef QT_NO_DEBUG_STREAM
+void _TypeDefModelItem::formatDebug(QDebug &d) const
+{
+    _CodeModelItem::formatDebug(d);
+    d << ", type=" << m_type;
+}
+#endif // !QT_NO_DEBUG_STREAM
 
 // ---------------------------------------------------------------------------
 CodeModel::AccessPolicy _EnumModelItem::accessPolicy() const
 {
-    return _M_accessPolicy;
+    return m_accessPolicy;
+}
+
+_EnumModelItem::~_EnumModelItem()
+{
 }
 
 void _EnumModelItem::setAccessPolicy(CodeModel::AccessPolicy accessPolicy)
 {
-    _M_accessPolicy = accessPolicy;
+    m_accessPolicy = accessPolicy;
 }
 
 EnumeratorList _EnumModelItem::enumerators() const
 {
-    return _M_enumerators;
+    return m_enumerators;
 }
 
 void _EnumModelItem::addEnumerator(EnumeratorModelItem item)
 {
-    _M_enumerators.append(item);
-}
-
-void _EnumModelItem::removeEnumerator(EnumeratorModelItem item)
-{
-    _M_enumerators.removeAt(_M_enumerators.indexOf(item));
+    m_enumerators.append(item);
 }
 
 bool _EnumModelItem::isAnonymous() const
 {
-    return _M_anonymous;
+    return m_anonymous;
 }
 
 void _EnumModelItem::setAnonymous(bool anonymous)
 {
-    _M_anonymous = anonymous;
+    m_anonymous = anonymous;
 }
 
+#ifndef QT_NO_DEBUG_STREAM
+void _EnumModelItem::formatDebug(QDebug &d) const
+{
+    _CodeModelItem::formatDebug(d);
+    if (m_anonymous)
+         d << " (anonymous)";
+    formatModelItemList(d, ", enumerators=", m_enumerators);
+}
+#endif // !QT_NO_DEBUG_STREAM
+
 // ---------------------------------------------------------------------------
+_EnumeratorModelItem::~_EnumeratorModelItem()
+{
+}
+
 QString _EnumeratorModelItem::value() const
 {
-    return _M_value;
+    return m_value;
 }
 
 void _EnumeratorModelItem::setValue(const QString &value)
 {
-    _M_value = value;
+    m_value = value;
 }
 
+#ifndef QT_NO_DEBUG_STREAM
+void _EnumeratorModelItem::formatDebug(QDebug &d) const
+{
+    _CodeModelItem::formatDebug(d);
+    if (!m_value.isEmpty())
+        d << ", value=\"" << m_value << '"';
+}
+#endif // !QT_NO_DEBUG_STREAM
+
 // ---------------------------------------------------------------------------
+_TemplateParameterModelItem::~_TemplateParameterModelItem()
+{
+}
+
 TypeInfo _TemplateParameterModelItem::type() const
 {
-    return _M_type;
+    return m_type;
 }
 
 void _TemplateParameterModelItem::setType(const TypeInfo &type)
 {
-    _M_type = type;
+    m_type = type;
 }
 
 bool _TemplateParameterModelItem::defaultValue() const
 {
-    return _M_defaultValue;
+    return m_defaultValue;
 }
 
 void _TemplateParameterModelItem::setDefaultValue(bool defaultValue)
 {
-    _M_defaultValue = defaultValue;
+    m_defaultValue = defaultValue;
 }
 
-// ---------------------------------------------------------------------------
-ScopeModelItem _ScopeModelItem::create(CodeModel *model)
+#ifndef QT_NO_DEBUG_STREAM
+void _TemplateParameterModelItem::formatDebug(QDebug &d) const
 {
-    ScopeModelItem item(new _ScopeModelItem(model));
-    return item;
+    _CodeModelItem::formatDebug(d);
+    d << ", type=" << m_type;
+    if (m_defaultValue)
+        d << " [defaultValue]";
 }
-
-ClassModelItem _ClassModelItem::create(CodeModel *model)
-{
-    ClassModelItem item(new _ClassModelItem(model));
-    return item;
-}
-
-NamespaceModelItem _NamespaceModelItem::create(CodeModel *model)
-{
-    NamespaceModelItem item(new _NamespaceModelItem(model));
-    return item;
-}
-
-FileModelItem _FileModelItem::create(CodeModel *model)
-{
-    FileModelItem item(new _FileModelItem(model));
-    return item;
-}
-
-ArgumentModelItem _ArgumentModelItem::create(CodeModel *model)
-{
-    ArgumentModelItem item(new _ArgumentModelItem(model));
-    return item;
-}
-
-FunctionModelItem _FunctionModelItem::create(CodeModel *model)
-{
-    FunctionModelItem item(new _FunctionModelItem(model));
-    return item;
-}
-
-FunctionDefinitionModelItem _FunctionDefinitionModelItem::create(CodeModel *model)
-{
-    FunctionDefinitionModelItem item(new _FunctionDefinitionModelItem(model));
-    return item;
-}
-
-VariableModelItem _VariableModelItem::create(CodeModel *model)
-{
-    VariableModelItem item(new _VariableModelItem(model));
-    return item;
-}
-
-TypeAliasModelItem _TypeAliasModelItem::create(CodeModel *model)
-{
-    TypeAliasModelItem item(new _TypeAliasModelItem(model));
-    return item;
-}
-
-EnumModelItem _EnumModelItem::create(CodeModel *model)
-{
-    EnumModelItem item(new _EnumModelItem(model));
-    return item;
-}
-
-EnumeratorModelItem _EnumeratorModelItem::create(CodeModel *model)
-{
-    EnumeratorModelItem item(new _EnumeratorModelItem(model));
-    return item;
-}
-
-TemplateParameterModelItem _TemplateParameterModelItem::create(CodeModel *model)
-{
-    TemplateParameterModelItem item(new _TemplateParameterModelItem(model));
-    return item;
-}
+#endif // !QT_NO_DEBUG_STREAM
 
 // ---------------------------------------------------------------------------
 TypeInfo _MemberModelItem::type() const
 {
-    return _M_type;
+    return m_type;
 }
 
 void _MemberModelItem::setType(const TypeInfo &type)
 {
-    _M_type = type;
+    m_type = type;
 }
 
 CodeModel::AccessPolicy _MemberModelItem::accessPolicy() const
 {
-    return _M_accessPolicy;
+    return m_accessPolicy;
+}
+
+_MemberModelItem::~_MemberModelItem()
+{
 }
 
 void _MemberModelItem::setAccessPolicy(CodeModel::AccessPolicy accessPolicy)
 {
-    _M_accessPolicy = accessPolicy;
+    m_accessPolicy = accessPolicy;
 }
 
 bool _MemberModelItem::isStatic() const
 {
-    return _M_isStatic;
+    return m_isStatic;
 }
 
 void _MemberModelItem::setStatic(bool isStatic)
 {
-    _M_isStatic = isStatic;
+    m_isStatic = isStatic;
 }
 
 bool _MemberModelItem::isConstant() const
 {
-    return _M_isConstant;
+    return m_isConstant;
 }
 
 void _MemberModelItem::setConstant(bool isConstant)
 {
-    _M_isConstant = isConstant;
+    m_isConstant = isConstant;
 }
 
 bool _MemberModelItem::isVolatile() const
 {
-    return _M_isVolatile;
+    return m_isVolatile;
 }
 
 void _MemberModelItem::setVolatile(bool isVolatile)
 {
-    _M_isVolatile = isVolatile;
+    m_isVolatile = isVolatile;
 }
 
 bool _MemberModelItem::isAuto() const
 {
-    return _M_isAuto;
+    return m_isAuto;
 }
 
 void _MemberModelItem::setAuto(bool isAuto)
 {
-    _M_isAuto = isAuto;
+    m_isAuto = isAuto;
 }
 
 bool _MemberModelItem::isFriend() const
 {
-    return _M_isFriend;
+    return m_isFriend;
 }
 
 void _MemberModelItem::setFriend(bool isFriend)
 {
-    _M_isFriend = isFriend;
+    m_isFriend = isFriend;
 }
 
 bool _MemberModelItem::isRegister() const
 {
-    return _M_isRegister;
+    return m_isRegister;
 }
 
 void _MemberModelItem::setRegister(bool isRegister)
 {
-    _M_isRegister = isRegister;
+    m_isRegister = isRegister;
 }
 
 bool _MemberModelItem::isExtern() const
 {
-    return _M_isExtern;
+    return m_isExtern;
 }
 
 void _MemberModelItem::setExtern(bool isExtern)
 {
-    _M_isExtern = isExtern;
+    m_isExtern = isExtern;
 }
 
 bool _MemberModelItem::isMutable() const
 {
-    return _M_isMutable;
+    return m_isMutable;
 }
 
 void _MemberModelItem::setMutable(bool isMutable)
 {
-    _M_isMutable = isMutable;
+    m_isMutable = isMutable;
 }
+
+#ifndef QT_NO_DEBUG_STREAM
+void _MemberModelItem::formatDebug(QDebug &d) const
+{
+    _CodeModelItem::formatDebug(d);
+    switch (m_accessPolicy) {
+    case CodeModel::Public:
+        d << ", public";
+        break;
+    case CodeModel::Protected:
+        d << ", protected";
+        break;
+    case CodeModel::Private:
+        d << ", private";
+        break;
+    }
+    d << ", type=";
+    if (m_isConstant)
+        d << "const ";
+    if (m_isVolatile)
+        d << "volatile ";
+    if (m_isStatic)
+        d << "static ";
+    if (m_isAuto)
+        d << "auto ";
+    if (m_isFriend)
+        d << "friend ";
+    if (m_isRegister)
+        d << "register ";
+    if (m_isExtern)
+        d << "extern ";
+    if (m_isMutable)
+        d << "mutable ";
+    d << m_type;
+    formatScopeList(d, ", templateParameters", m_templateParameters);
+}
+#endif // !QT_NO_DEBUG_STREAM
 
 // kate: space-indent on; indent-width 2; replace-tabs on;
 

@@ -29,54 +29,59 @@
 #include "testfunctiontag.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestFunctionTag::testFunctionTagForSpecificSignature()
 {
-    const char cppCode[] = "void globalFunction(int); void globalFunction(float); void dummy()";
+    const char cppCode[] = "void globalFunction(int); void globalFunction(float); void dummy();\n";
     const char xmlCode[] = "\
-    <typesystem package=\"Foo\">\
-        <primitive-type name='int'/> \
-        <primitive-type name='float'/> \
-        <function signature='globalFunction(int)'/>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
+    <typesystem package=\"Foo\">\n\
+        <primitive-type name='int'/>\n\
+        <primitive-type name='float'/>\n\
+        <function signature='globalFunction(int)'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
 
-    FunctionTypeEntry* func = (FunctionTypeEntry*) TypeDatabase::instance()->findType(QLatin1String("globalFunction"));
+    const TypeEntry *func = TypeDatabase::instance()->findType(QLatin1String("globalFunction"));
     QVERIFY(func);
-    QCOMPARE(t.builder()->globalFunctions().size(), 1);
+    QCOMPARE(builder->globalFunctions().size(), 1);
 }
 
 void TestFunctionTag::testFunctionTagForAllSignatures()
 {
-    const char cppCode[] = "void globalFunction(int); void globalFunction(float); void dummy();";
+    const char cppCode[] = "void globalFunction(int); void globalFunction(float); void dummy();\n";
     const char xmlCode[] = "\
-    <typesystem package=\"Foo\">\
-        <primitive-type name='int'/> \
-        <primitive-type name='float'/> \
-        <function signature='globalFunction(int)'/>\
-        <function signature='globalFunction(float)'/>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
+    <typesystem package=\"Foo\">\n\
+        <primitive-type name='int'/>\n\
+        <primitive-type name='float'/>\n\
+        <function signature='globalFunction(int)'/>\n\
+        <function signature='globalFunction(float)'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
 
-    FunctionTypeEntry* func = (FunctionTypeEntry*) TypeDatabase::instance()->findType(QLatin1String("globalFunction"));
+    const TypeEntry *func = TypeDatabase::instance()->findType(QLatin1String("globalFunction"));
     QVERIFY(func);
-    QCOMPARE(t.builder()->globalFunctions().size(), 2);
+    QCOMPARE(builder->globalFunctions().size(), 2);
 }
 
 void TestFunctionTag::testRenameGlobalFunction()
 {
-    const char* cppCode ="void global_function_with_ugly_name();";
+    const char* cppCode ="void global_function_with_ugly_name();\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <function signature='global_function_with_ugly_name()' rename='smooth' />\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
+    <typesystem package='Foo'>\n\
+        <function signature='global_function_with_ugly_name()' rename='smooth'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
 
-    FunctionTypeEntry* func = (FunctionTypeEntry*) TypeDatabase::instance()->findType(QLatin1String("global_function_with_ugly_name"));
+    const TypeEntry *func = TypeDatabase::instance()->findType(QLatin1String("global_function_with_ugly_name"));
     QVERIFY(func);
 
-    QCOMPARE(t.builder()->globalFunctions().size(), 1);
-    const AbstractMetaFunction* metaFunc = t.builder()->globalFunctions().first();
+    QCOMPARE(builder->globalFunctions().size(), 1);
+    const AbstractMetaFunction* metaFunc = builder->globalFunctions().first();
 
     QVERIFY(metaFunc);
     QCOMPARE(metaFunc->modifications().size(), 1);

@@ -42,7 +42,6 @@
 
 #include "sbkpython.h"
 #include <limits>
-#include <memory>
 #include <typeinfo>
 
 #include "sbkstring.h"
@@ -132,7 +131,7 @@ struct Converter<T*>
     static T* toCpp(PyObject* pyobj)
     {
         if (PyObject_TypeCheck(pyobj, SbkType<T>()))
-            return (T*) Object::cppPointer(reinterpret_cast<SbkObject*>(pyobj), SbkType<T>());
+            return reinterpret_cast<T *>(Object::cppPointer(reinterpret_cast<SbkObject *>(pyobj), SbkType<T>()));
         else if (Converter<T>::isConvertible(pyobj))
             return new T(Converter<T>::toCpp(pyobj));
         else if (pyobj == Py_None)
@@ -164,7 +163,7 @@ struct Converter<void*>
     {
         if (!cppobj)
             Py_RETURN_NONE;
-        PyObject* result = (PyObject*) cppobj;
+        PyObject *result = reinterpret_cast<PyObject *>(cppobj);
         Py_INCREF(result);
         return result;
     }
@@ -205,8 +204,9 @@ struct ValueTypeConverter
             SbkObjectType* shiboType = reinterpret_cast<SbkObjectType*>(SbkType<T>());
             if (ObjectType::hasExternalCppConversions(shiboType) && isConvertible(pyobj)) {
                 T* cptr = reinterpret_cast<T*>(ObjectType::callExternalCppConversion(shiboType, pyobj));
-                std::auto_ptr<T> cptr_auto_ptr(cptr);
-                return *cptr;
+                const T result = *cptr;
+                delete cptr;
+                return result;
             }
             assert(false);
         }
@@ -242,10 +242,11 @@ struct ObjectTypeConverter
     {
         if (pyobj == Py_None)
             return 0;
+        SbkObject *sbkObj = reinterpret_cast<SbkObject *>(pyobj);
         SbkObjectType* shiboType = reinterpret_cast<SbkObjectType*>(pyobj->ob_type);
         if (ObjectType::hasCast(shiboType))
-            return reinterpret_cast<T*>(ObjectType::cast(shiboType, reinterpret_cast<SbkObject*>(pyobj), SbkType<T>()));
-        return (T*) Object::cppPointer(reinterpret_cast<SbkObject*>(pyobj), SbkType<T>());
+            return reinterpret_cast<T*>(ObjectType::cast(shiboType, sbkObj, SbkType<T>()));
+        return reinterpret_cast<T *>(Object::cppPointer(sbkObj, SbkType<T>()));
     }
 };
 
@@ -452,6 +453,14 @@ struct Converter<unsigned PY_LONG_LONG>
     }
     static inline unsigned PY_LONG_LONG toCpp(PyObject* pyobj)
     {
+#if PY_MAJOR_VERSION >= 3
+        if (!PyLong_Check(pyobj)) {
+            PyErr_SetString(PyExc_TypeError, "Invalid type for unsigned long long conversion");
+            return 0;
+        }
+
+        return PyLong_AsUnsignedLongLong(pyobj);
+#else
         if (PyInt_Check(pyobj)) {
             long result = (unsigned PY_LONG_LONG) PyInt_AsLong(pyobj);
             if (result < 0) {
@@ -465,6 +474,7 @@ struct Converter<unsigned PY_LONG_LONG>
             PyErr_SetString(PyExc_TypeError, "Invalid type for unsigned long long conversion");
             return 0;
         }
+#endif // Python 2
     }
 };
 

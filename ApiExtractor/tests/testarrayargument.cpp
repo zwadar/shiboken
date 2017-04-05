@@ -29,24 +29,27 @@
 #include "testarrayargument.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestArrayArgument::testArrayArgumentWithSizeDefinedByInteger()
 {
     const char* cppCode ="\
-    struct A { \
-        enum SomeEnum { Value0, Value1, NValues }; \
-        void method(double[3]); \
-    };";
+    struct A {\n\
+        enum SomeEnum { Value0, Value1, NValues };\n\
+        void method(double[3]);\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <primitive-type name='double'/>\
-        <object-type name='A'>\
-            <enum-type name='SomeEnum'/>\
-        </object-type>\
-    </typesystem>";
+    <typesystem package='Foo'>\n\
+        <primitive-type name='double'/>\n\
+        <object-type name='A'>\n\
+            <enum-type name='SomeEnum'/>\n\
+        </object-type>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClass* classA = t.builder()->classes().findClass(QLatin1String("A"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(builder->classes(), QLatin1String("A"));
     QVERIFY(classA);
 
     const AbstractMetaArgument* arg = classA->functions().last()->arguments().first();
@@ -58,20 +61,21 @@ void TestArrayArgument::testArrayArgumentWithSizeDefinedByInteger()
 void TestArrayArgument::testArrayArgumentWithSizeDefinedByEnumValue()
 {
     const char* cppCode ="\
-    struct A { \
-        enum SomeEnum { Value0, Value1, NValues }; \
-        void method(double[NValues]); \
-    };";
+    struct A {\n\
+        enum SomeEnum { Value0, Value1, NValues };\n\
+        void method(double[NValues]);\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <primitive-type name='double'/>\
-        <object-type name='A'>\
-            <enum-type name='SomeEnum'/>\
-        </object-type>\
-    </typesystem>";
+    <typesystem package='Foo'>\n\
+        <primitive-type name='double'/>\n\
+        <object-type name='A'>\n\
+            <enum-type name='SomeEnum'/>\n\
+        </object-type>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClass* classA = t.builder()->classes().findClass(QLatin1String("A"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClass *classA = AbstractMetaClass::findClass(builder->classes(), QLatin1String("A"));
     QVERIFY(classA);
 
     AbstractMetaEnum* someEnum = classA->findEnum(QLatin1String("SomeEnum"));
@@ -88,23 +92,24 @@ void TestArrayArgument::testArrayArgumentWithSizeDefinedByEnumValue()
 void TestArrayArgument::testArrayArgumentWithSizeDefinedByEnumValueFromGlobalEnum()
 {
     const char* cppCode ="\
-    enum SomeEnum { Value0, Value1, NValues }; \
-    struct A { \
-        void method(double[NValues]); \
-    };";
+    enum SomeEnum { Value0, Value1, NValues };\n\
+    struct A {\n\
+        void method(double[NValues]);\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <primitive-type name='double'/>\
-        <enum-type name='SomeEnum'/>\
-        <object-type name='A'>\
-        </object-type>\
-    </typesystem>";
+    <typesystem package='Foo'>\n\
+        <primitive-type name='double'/>\n\
+        <enum-type name='SomeEnum'/>\n\
+        <object-type name='A'>\n\
+        </object-type>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClass* classA = t.builder()->classes().findClass(QLatin1String("A"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(builder->classes(), QLatin1String("A"));
     QVERIFY(classA);
 
-    AbstractMetaEnum* someEnum = t.builder()->globalEnums().first();
+    AbstractMetaEnum* someEnum = builder->globalEnums().first();
     QVERIFY(someEnum);
     AbstractMetaEnumValue* nvalues = 0;
     foreach (AbstractMetaEnumValue* enumValue, someEnum->values()) {

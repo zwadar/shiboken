@@ -33,45 +33,34 @@
 #include "reporthandler.h"
 #include "typedatabase.h"
 
-class TestUtil
+namespace TestUtil
 {
-public:
-    TestUtil(const char* cppCode, const char* xmlCode,
-             bool silent = true, const char* apiVersion = 0,
-             QStringList dropTypeEntries = QStringList())
-        : m_builder(0)
+    static AbstractMetaBuilder *parse(const char *cppCode, const char *xmlCode,
+                                      bool silent = true,
+                                      const char *apiVersion = Q_NULLPTR,
+                                      const QStringList &dropTypeEntries = QStringList())
     {
         ReportHandler::setSilent(silent);
-        m_builder = new AbstractMetaBuilder;
         TypeDatabase* td = TypeDatabase::instance(true);
-        if (apiVersion)
-            td->setApiVersion(QLatin1String("*"), apiVersion);
+        if (apiVersion && !td->setApiVersion(QLatin1String("*"), QLatin1String(apiVersion)))
+            return Q_NULLPTR;
         td->setDropTypeEntries(dropTypeEntries);
         QBuffer buffer;
         // parse typesystem
         buffer.setData(xmlCode);
+        if (!buffer.open(QIODevice::ReadOnly))
+            return Q_NULLPTR;
         td->parseFile(&buffer);
         buffer.close();
         // parse C++ code
         buffer.setData(cppCode);
-        bool res = m_builder->build(&buffer);
-        Q_UNUSED(res);
-        Q_ASSERT(res);
+        AbstractMetaBuilder *builder = new AbstractMetaBuilder;
+        if (!builder->build(&buffer)) {
+            delete builder;
+            return Q_NULLPTR;
+        }
+        return builder;
     }
-
-    ~TestUtil()
-    {
-        delete m_builder;
-        m_builder = 0;
-    }
-
-    AbstractMetaBuilder* builder()
-    {
-        return m_builder;
-    }
-
-private:
-    AbstractMetaBuilder* m_builder;
-};
+} // namespace TestUtil
 
 #endif

@@ -46,6 +46,7 @@
 #define MIN_CTOR_ERROR_MSG        "Could not find a minimal constructor for type '%1'. "\
                                   "This will result in a compilation error."
 #define PYTHON_TO_CPP_VAR         "pythonToCpp"
+#define SMART_POINTER_GETTER      "kSmartPointerGetter"
 
 #define CHECKTYPE_REGEX           "%CHECKTYPE\\[([^\\[]*)\\]\\("
 #define ISCONVERTIBLE_REGEX       "%ISCONVERTIBLE\\[([^\\[]*)\\]\\("
@@ -54,11 +55,14 @@
                                   "(?:\\s+)=(?:\\s+)%CONVERTTOCPP\\[([^\\[]*)\\]\\("
 
 #include <generator.h>
-#include <QtCore/QTextStream>
 
-#include "overloaddata.h"
+#include "typesystem.h"
 
 class DocParser;
+class CodeSnip;
+class OverloadData;
+
+QT_FORWARD_DECLARE_CLASS(QTextStream)
 
 /**
  * Abstract generator that contains common methods used in CppGenerator and HeaderGenerator.
@@ -136,20 +140,20 @@ public:
 
     /// Write user's custom code snippets at class or module level.
     void writeCodeSnips(QTextStream& s,
-                        const CodeSnipList& codeSnips,
-                        CodeSnip::Position position,
+                        const QList<CodeSnip>& codeSnips,
+                        TypeSystem::CodeSnipPosition position,
                         TypeSystem::Language language,
                         const AbstractMetaClass* context = 0);
     /// Write user's custom code snippets at function level.
     void writeCodeSnips(QTextStream& s,
-                        const CodeSnipList& codeSnips,
-                        CodeSnip::Position position,
+                        const QList<CodeSnip>& codeSnips,
+                        TypeSystem::CodeSnipPosition position,
                         TypeSystem::Language language,
                         const AbstractMetaFunction* func,
                         const AbstractMetaArgument* lastArg = 0);
 
     /// Returns a string with the user's custom code snippets that comply with \p position and \p language.
-    QString getCodeSnippets(const CodeSnipList& codeSnips, CodeSnip::Position position, TypeSystem::Language language);
+    QString getCodeSnippets(const QList<CodeSnip>& codeSnips, TypeSystem::CodeSnipPosition position, TypeSystem::Language language);
 
     /// Replaces variables for the user's custom code at global or class level.
     void processCodeSnip(QString& code, const AbstractMetaClass* context = 0);
@@ -242,6 +246,9 @@ public:
     /// Returns true if the class needs to have a getattro function.
     bool classNeedsGetattroFunction(const AbstractMetaClass* metaClass);
 
+    /// Returns true if the class needs to have a setattro function.
+    bool classNeedsSetattroFunction(const AbstractMetaClass *metaClass);
+
     /// Returns a list of methods of the given class where each one is part of a different overload with both static and non-static method.
     AbstractMetaFunctionList getMethodsWithBothStaticAndNonStaticMethods(const AbstractMetaClass* metaClass);
 
@@ -270,6 +277,7 @@ public:
     const AbstractMetaClass* getProperEnclosingClassForEnum(const AbstractMetaEnum* metaEnum);
 
     QString wrapperName(const AbstractMetaClass* metaClass) const;
+    QString wrapperName(const AbstractMetaType *metaType) const;
 
     static QString fullPythonFunctionName(const AbstractMetaFunction* func);
     static QString protectedEnumSurrogateName(const AbstractMetaEnum* metaEnum);
@@ -364,10 +372,7 @@ public:
     QString guessCPythonCheckFunction(const QString& type, AbstractMetaType** metaType);
     QString cpythonIsConvertibleFunction(const TypeEntry* type, bool genericNumberType = false, bool checkExact = false);
     QString cpythonIsConvertibleFunction(const AbstractMetaType* metaType, bool genericNumberType = false);
-    inline QString cpythonIsConvertibleFunction(const AbstractMetaArgument* metaArg, bool genericNumberType = false)
-    {
-        return cpythonIsConvertibleFunction(metaArg->type(), genericNumberType);
-    }
+    QString cpythonIsConvertibleFunction(const AbstractMetaArgument* metaArg, bool genericNumberType = false);
     QString guessCPythonIsConvertible(const QString& type);
 
     QString cpythonToCppConversionFunction(const AbstractMetaClass* metaClass);
@@ -384,26 +389,17 @@ public:
     QString cpythonGetterFunctionName(const AbstractMetaField* metaField);
     QString cpythonSetterFunctionName(const AbstractMetaField* metaField);
     QString cpythonWrapperCPtr(const AbstractMetaClass* metaClass, QString argName = QLatin1String(PYTHON_SELF_VAR));
-    QString cpythonWrapperCPtr(const AbstractMetaType* metaType, QString argName);
+    QString cpythonWrapperCPtr(const AbstractMetaType *metaType, QString argName);
     QString cpythonWrapperCPtr(const TypeEntry* type, QString argName);
 
     /// Guesses the scope to where belongs an argument's default value.
     QString guessScopeForDefaultValue(const AbstractMetaFunction* func, const AbstractMetaArgument* arg);
 
     QString cpythonEnumName(const EnumTypeEntry* enumEntry);
-    inline QString cpythonEnumName(const AbstractMetaEnum* metaEnum)
-    {
-        return cpythonEnumName(metaEnum->typeEntry());
-    }
+    QString cpythonEnumName(const AbstractMetaEnum* metaEnum);
 
     QString cpythonFlagsName(const FlagsTypeEntry* flagsEntry);
-    inline QString cpythonFlagsName(const AbstractMetaEnum* metaEnum)
-    {
-        FlagsTypeEntry* flags = metaEnum->typeEntry()->flags();
-        if (!flags)
-            return QString();
-        return cpythonFlagsName(flags);
-    }
+    QString cpythonFlagsName(const AbstractMetaEnum* metaEnum);
     /// Returns the special cast function name, the function used to proper cast class with multiple inheritance.
     QString cpythonSpecialCastFunctionName(const AbstractMetaClass* metaClass);
 

@@ -32,9 +32,10 @@
 #include <QtCore/QHash>
 #include <QtCore/QTextStream>
 #include <QXmlStreamReader>
-#include <abstractmetalang.h>
 #include "generator.h"
 #include "docparser.h"
+#include "typesystem_enums.h"
+#include "typesystem_typedefs.h"
 
 class QtDocParser;
 class AbstractMetaFunction;
@@ -193,8 +194,9 @@ public:
     }
 
 protected:
-    QString fileNameForClass(const AbstractMetaClass* cppClass) const;
-    void generateClass(QTextStream& s, const AbstractMetaClass* metaClass);
+    QString fileNamePrefix() const;
+    QString fileNameForContext(GeneratorContext &context) const;
+    void generateClass(QTextStream &s, GeneratorContext &classContext);
     bool finishGeneration();
 
     void writeFunctionArguments(QTextStream&, const AbstractMetaFunction*, Options) const {}
@@ -214,8 +216,8 @@ private:
 
     void writeConstructors(QTextStream &s, const AbstractMetaClass *cppClass);
     void writeFormatedText(QTextStream& s, const Documentation& doc, const AbstractMetaClass* metaclass = 0);
-    bool writeInjectDocumentation(QTextStream& s, DocModification::Mode mode, const AbstractMetaClass* cppClass, const AbstractMetaFunction* func);
-    void writeDocSnips(QTextStream &s, const CodeSnipList &codeSnips, CodeSnip::Position position, TypeSystem::Language language);
+    bool writeInjectDocumentation(QTextStream& s, TypeSystem::DocModificationMode mode, const AbstractMetaClass* cppClass, const AbstractMetaFunction* func);
+    void writeDocSnips(QTextStream &s, const CodeSnipList &codeSnips, TypeSystem::CodeSnipPosition position, TypeSystem::Language language);
 
 
     QString parseArgDocStyle(const AbstractMetaClass *cppClass, const AbstractMetaFunction *func);

@@ -29,27 +29,29 @@
 #include "testnumericaltypedef.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestNumericalTypedef::testNumericalTypedef()
 {
     const char* cppCode ="\
-    typedef double real;\
-    void funcDouble(double);\
-    void funcReal(real);\
-    ";
+    typedef double real;\n\
+    void funcDouble(double);\n\
+    void funcReal(real);\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <primitive-type name='double' /> \
-        <primitive-type name='real' /> \
-        <function signature='funcDouble(double)' />\
-        <function signature='funcReal(real)' />\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
+    <typesystem package='Foo'>\n\
+        <primitive-type name='double'/>\n\
+        <primitive-type name='real'/>\n\
+        <function signature='funcDouble(double)'/>\n\
+        <function signature='funcReal(real)'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
 
-    QCOMPARE(t.builder()->globalFunctions().size(), 2);
-    const AbstractMetaFunction* funcDouble = t.builder()->globalFunctions().first();
+    QCOMPARE(builder->globalFunctions().size(), 2);
+    const AbstractMetaFunction* funcDouble = builder->globalFunctions().first();
     QVERIFY(funcDouble);
-    const AbstractMetaFunction* funcReal = t.builder()->globalFunctions().last();
+    const AbstractMetaFunction* funcReal = builder->globalFunctions().last();
     QVERIFY(funcReal);
 
     if (funcDouble->name() == QLatin1String("funcReal"))
@@ -74,24 +76,24 @@ void TestNumericalTypedef::testNumericalTypedef()
 void TestNumericalTypedef::testUnsignedNumericalTypedef()
 {
     const char* cppCode ="\
-    typedef unsigned short ushort;\
-    void funcUnsignedShort(unsigned short);\
-    void funcUShort(ushort);\
-    ";
+    typedef unsigned short ushort;\n\
+    void funcUnsignedShort(unsigned short);\n\
+    void funcUShort(ushort);\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'> \
-        <primitive-type name='short' /> \
-        <primitive-type name='unsigned short' /> \
-        <primitive-type name='ushort' /> \
-        <function signature='funcUnsignedShort(unsigned short)' />\
-        <function signature='funcUShort(ushort)' />\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
+    <typesystem package='Foo'>\n\
+        <primitive-type name='short'/>\n\
+        <primitive-type name='unsigned short'/>\n\
+        <primitive-type name='ushort'/>\n\
+        <function signature='funcUnsignedShort(unsigned short)'/>\n\
+        <function signature='funcUShort(ushort)'/>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
 
-    QCOMPARE(t.builder()->globalFunctions().size(), 2);
-    const AbstractMetaFunction* funcUnsignedShort = t.builder()->globalFunctions().first();
+    QCOMPARE(builder->globalFunctions().size(), 2);
+    const AbstractMetaFunction* funcUnsignedShort = builder->globalFunctions().first();
     QVERIFY(funcUnsignedShort);
-    const AbstractMetaFunction* funcUShort = t.builder()->globalFunctions().last();
+    const AbstractMetaFunction* funcUShort = builder->globalFunctions().last();
     QVERIFY(funcUShort);
 
     if (funcUnsignedShort->name() == QLatin1String("funcUShort"))

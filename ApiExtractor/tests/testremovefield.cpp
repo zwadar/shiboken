@@ -29,25 +29,27 @@
 #include "testremovefield.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestRemoveField::testRemoveField()
 {
     const char* cppCode ="\
-    struct A {\
-        int fieldA;\
-        int fieldB;\
-    };\
-    ";
+    struct A {\n\
+        int fieldA;\n\
+        int fieldB;\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package=\"Foo\"> \
-        <primitive-type name='int' />\
-        <value-type name='A'> \
-            <modify-field name='fieldB' remove='all' />\
-        </value-type>\
-    </typesystem>";
-    TestUtil t(cppCode, xmlCode, false);
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    <typesystem package=\"Foo\">\n\
+        <primitive-type name='int'/>\n\
+        <value-type name='A'>\n\
+            <modify-field name='fieldB' remove='all'/>\n\
+        </value-type>\n\
+    </typesystem>\n";
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode, false));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
     QCOMPARE(classA->fields().size(), 1);
     const AbstractMetaField* fieldA = classA->fields().first();

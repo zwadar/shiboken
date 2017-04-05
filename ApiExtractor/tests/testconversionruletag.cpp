@@ -29,6 +29,8 @@
 #include "testconversionruletag.h"
 #include <QtTest/QTest>
 #include "testutil.h"
+#include <abstractmetalang.h>
+#include <typesystem.h>
 #include <QFile>
 #include <QTemporaryFile>
 
@@ -41,16 +43,17 @@ void TestConversionRuleTag::testConversionRuleTagWithFile()
     QCOMPARE(file.write(conversionData), qint64(sizeof(conversionData)-1));
     file.close();
 
-    const char cppCode[] = "struct A {};";
+    const char cppCode[] = "struct A {};\n";
     QString xmlCode = QLatin1String("\
-    <typesystem package='Foo'>\
-        <value-type name='A'>\
-            <conversion-rule file='") + file.fileName() + QLatin1String("' />\
-        </value-type>\
-    </typesystem>");
-    TestUtil t(cppCode, xmlCode.toLocal8Bit().data());
-    AbstractMetaClassList classes = t.builder()->classes();
-    AbstractMetaClass* classA = classes.findClass(QLatin1String("A"));
+    <typesystem package='Foo'>\n\
+        <value-type name='A'>\n\
+            <conversion-rule file='") + file.fileName() + QLatin1String("'/>\n\
+        </value-type>\n\
+    </typesystem>\n");
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode.toLocal8Bit().data()));
+    QVERIFY(!builder.isNull());
+    AbstractMetaClassList classes = builder->classes();
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(classes, QLatin1String("A"));
     QVERIFY(classA);
     const ComplexTypeEntry* typeEntry = classA->typeEntry();
     QVERIFY(typeEntry->hasConversionRule());
@@ -60,43 +63,43 @@ void TestConversionRuleTag::testConversionRuleTagWithFile()
 void TestConversionRuleTag::testConversionRuleTagReplace()
 {
     const char cppCode[] = "\
-    struct A {\
-        A();\
-        A(const char*, int);\
-    };\
-    struct B {\
-        A createA();\
-    };\
-    ";
+    struct A {\n\
+        A();\n\
+        A(const char*, int);\n\
+    };\n\
+    struct B {\n\
+        A createA();\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <primitive-type name='int'/>\
-        <primitive-type name='char'/>\
-        <primitive-type name='A'>\
-            <conversion-rule>\
-                <native-to-target>\
-                DoThis();\
-                return ConvertFromCppToPython(%IN);\
-                </native-to-target>\
-                <target-to-native>\
-                    <add-conversion type='TargetNone' check='%IN == Target_None'>\
-                    DoThat();\
-                    DoSomething();\
-                    %OUT = A();\
-                    </add-conversion>\
-                    <add-conversion type='B' check='CheckIfInputObjectIsB(%IN)'>\
-                    %OUT = %IN.createA();\
-                    </add-conversion>\
-                    <add-conversion type='String' check='String_Check(%IN)'>\
-                    %OUT = new A(String_AsString(%IN), String_GetSize(%IN));\
-                    </add-conversion>\
-                </target-to-native>\
-            </conversion-rule>\
-        </primitive-type>\
-        <value-type name='B'/>\
-    </typesystem>";
+    <typesystem package='Foo'>\n\
+        <primitive-type name='int'/>\n\
+        <primitive-type name='char'/>\n\
+        <primitive-type name='A'>\n\
+            <conversion-rule>\n\
+                <native-to-target>\n\
+                DoThis();\n\
+                return ConvertFromCppToPython(%IN);\n\
+                </native-to-target>\n\
+                <target-to-native>\n\
+                    <add-conversion type='TargetNone' check='%IN == Target_None'>\n\
+                    DoThat();\n\
+                    DoSomething();\n\
+                    %OUT = A();\n\
+                    </add-conversion>\n\
+                    <add-conversion type='B' check='CheckIfInputObjectIsB(%IN)'>\n\
+                    %OUT = %IN.createA();\n\
+                    </add-conversion>\n\
+                    <add-conversion type='String' check='String_Check(%IN)'>\n\
+                    %OUT = new A(String_AsString(%IN), String_GetSize(%IN));\n\
+                    </add-conversion>\n\
+                </target-to-native>\n\
+            </conversion-rule>\n\
+        </primitive-type>\n\
+        <value-type name='B'/>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode);
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
     TypeDatabase* typeDb = TypeDatabase::instance();
     PrimitiveTypeEntry* typeA = typeDb->findPrimitiveType(QLatin1String("A"));
     QVERIFY(typeA);
@@ -105,7 +108,8 @@ void TestConversionRuleTag::testConversionRuleTagReplace()
     QVERIFY(conversion);
 
     QCOMPARE(typeA, conversion->ownerType());
-    QCOMPARE(conversion->nativeToTargetConversion().trimmed(), QLatin1String("DoThis();                return ConvertFromCppToPython(%IN);"));
+    QCOMPARE(conversion->nativeToTargetConversion().simplified(),
+             QLatin1String("DoThis(); return ConvertFromCppToPython(%IN);"));
 
     QVERIFY(conversion->replaceOriginalTargetToNativeConversions());
     QVERIFY(conversion->hasTargetToNativeConversions());
@@ -117,7 +121,8 @@ void TestConversionRuleTag::testConversionRuleTagReplace()
     QVERIFY(toNative->isCustomType());
     QCOMPARE(toNative->sourceType(), (const TypeEntry*)0);
     QCOMPARE(toNative->sourceTypeCheck(), QLatin1String("%IN == Target_None"));
-    QCOMPARE(toNative->conversion().trimmed(), QLatin1String("DoThat();                    DoSomething();                    %OUT = A();"));
+    QCOMPARE(toNative->conversion().simplified(),
+             QLatin1String("DoThat(); DoSomething(); %OUT = A();"));
 
     toNative = conversion->targetToNativeConversions().at(1);
     QVERIFY(toNative);
@@ -141,28 +146,28 @@ void TestConversionRuleTag::testConversionRuleTagReplace()
 void TestConversionRuleTag::testConversionRuleTagAdd()
 {
     const char cppCode[] = "\
-    struct Date {\
-        Date();\
-        Date(int, int, int);\
-    };\
-    ";
+    struct Date {\n\
+        Date();\n\
+        Date(int, int, int);\n\
+    };\n";
     const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <primitive-type name='int'/>\
-        <value-type name='Date'>\
-            <conversion-rule>\
-                <target-to-native replace='no'>\
-                    <add-conversion type='TargetDate' check='TargetDate_Check(%IN)'>\
-                    if (!TargetDateTimeAPI) TargetDateTime_IMPORT;\
-                    %OUT = new Date(TargetDate_Day(%IN), TargetDate_Month(%IN), TargetDate_Year(%IN));\
-                    </add-conversion>\
-                </target-to-native>\
-            </conversion-rule>\
-        </value-type>\
-    </typesystem>";
+    <typesystem package='Foo'>\n\
+        <primitive-type name='int'/>\n\
+        <value-type name='Date'>\n\
+            <conversion-rule>\n\
+                <target-to-native replace='no'>\n\
+                    <add-conversion type='TargetDate' check='TargetDate_Check(%IN)'>\n\
+if (!TargetDateTimeAPI) TargetDateTime_IMPORT;\n\
+%OUT = new Date(TargetDate_Day(%IN), TargetDate_Month(%IN), TargetDate_Year(%IN));\n\
+                    </add-conversion>\n\
+                </target-to-native>\n\
+            </conversion-rule>\n\
+        </value-type>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode);
-    AbstractMetaClass* classA = t.builder()->classes().findClass(QLatin1String("Date"));
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
+    const AbstractMetaClass *classA = AbstractMetaClass::findClass(builder->classes(), QLatin1String("Date"));
     QVERIFY(classA);
 
     CustomConversion* conversion = classA->typeEntry()->customConversion();
@@ -180,36 +185,48 @@ void TestConversionRuleTag::testConversionRuleTagAdd()
     QVERIFY(toNative->isCustomType());
     QCOMPARE(toNative->sourceType(), (const TypeEntry*)0);
     QCOMPARE(toNative->sourceTypeCheck(), QLatin1String("TargetDate_Check(%IN)"));
-    QCOMPARE(toNative->conversion().trimmed(), QLatin1String("if (!TargetDateTimeAPI) TargetDateTime_IMPORT;                    %OUT = new Date(TargetDate_Day(%IN), TargetDate_Month(%IN), TargetDate_Year(%IN));"));
+    QCOMPARE(toNative->conversion().trimmed(),
+             QLatin1String("if (!TargetDateTimeAPI) TargetDateTime_IMPORT;\n%OUT = new Date(TargetDate_Day(%IN), TargetDate_Month(%IN), TargetDate_Year(%IN));"));
 }
 
 void TestConversionRuleTag::testConversionRuleTagWithInsertTemplate()
 {
     const char cppCode[] = "struct A {};";
     const char* xmlCode = "\
-    <typesystem package='Foo'>\
-        <primitive-type name='int'/>\
-        <template name='native_to_target'>\
-        return ConvertFromCppToPython(%IN);\
-        </template>\
-        <template name='target_to_native'>\
-        %OUT = %IN.createA();\
-        </template>\
-        <primitive-type name='A'>\
-            <conversion-rule>\
-                <native-to-target>\
-                    <insert-template name='native_to_target'/>\
-                </native-to-target>\
-                <target-to-native>\
-                    <add-conversion type='TargetType'>\
-                        <insert-template name='target_to_native'/>\
-                    </add-conversion>\
-                </target-to-native>\
-            </conversion-rule>\
-        </primitive-type>\
-    </typesystem>";
+    <typesystem package='Foo'>\n\
+        <primitive-type name='int'/>\n\
+        <!-- single line -->\n\
+        <template name='native_to_target'>return ConvertFromCppToPython(%IN);</template>\n\
+        <!-- multi-line -->\n\
+        <template name='target_to_native'>\n\
+%OUT = %IN.createA();\n\
+        </template>\n\
+        <primitive-type name='A'>\n\
+            <conversion-rule>\n\
+                <native-to-target>\n\
+                    <insert-template name='native_to_target'/>\n\
+                </native-to-target>\n\
+                <target-to-native>\n\
+                    <add-conversion type='TargetType'>\n\
+                        <insert-template name='target_to_native'/>\n\
+                    </add-conversion>\n\
+                </target-to-native>\n\
+            </conversion-rule>\n\
+        </primitive-type>\n\
+    </typesystem>\n";
 
-    TestUtil t(cppCode, xmlCode);
+    const char nativeToTargetExpected[] =
+    "// TEMPLATE - native_to_target - START\n"
+    "return ConvertFromCppToPython(%IN);\n"
+    "// TEMPLATE - native_to_target - END";
+
+    const char targetToNativeExpected[] =
+    "// TEMPLATE - target_to_native - START\n"
+    "%OUT = %IN.createA();\n"
+    "// TEMPLATE - target_to_native - END";
+
+    QScopedPointer<AbstractMetaBuilder> builder(TestUtil::parse(cppCode, xmlCode));
+    QVERIFY(!builder.isNull());
     TypeDatabase* typeDb = TypeDatabase::instance();
     PrimitiveTypeEntry* typeA = typeDb->findPrimitiveType(QLatin1String("A"));
     QVERIFY(typeA);
@@ -219,7 +236,7 @@ void TestConversionRuleTag::testConversionRuleTagWithInsertTemplate()
 
     QCOMPARE(typeA, conversion->ownerType());
     QCOMPARE(conversion->nativeToTargetConversion().trimmed(),
-             QLatin1String("// TEMPLATE - native_to_target - START        return ConvertFromCppToPython(%IN);        // TEMPLATE - native_to_target - END"));
+             QLatin1String(nativeToTargetExpected));
 
     QVERIFY(conversion->hasTargetToNativeConversions());
     QCOMPARE(conversion->targetToNativeConversions().size(), 1);
@@ -227,7 +244,7 @@ void TestConversionRuleTag::testConversionRuleTagWithInsertTemplate()
     CustomConversion::TargetToNativeConversion* toNative = conversion->targetToNativeConversions().first();
     QVERIFY(toNative);
     QCOMPARE(toNative->conversion().trimmed(),
-             QLatin1String("// TEMPLATE - target_to_native - START        %OUT = %IN.createA();        // TEMPLATE - target_to_native - END"));
+             QLatin1String(targetToNativeExpected));
 }
 
 QTEST_APPLESS_MAIN(TestConversionRuleTag)
