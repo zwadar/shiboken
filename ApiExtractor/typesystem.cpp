@@ -32,6 +32,7 @@
 #include "reporthandler.h"
 #include <QtCore/QDir>
 #include <QtCore/QFile>
+#include <QtCore/QRegularExpression>
 #include <QtCore/QXmlStreamAttributes>
 #include <QtCore/QXmlStreamReader>
 
@@ -48,7 +49,7 @@ static inline QString nameAttribute() { return QStringLiteral("name"); }
 static inline QString sinceAttribute() { return QStringLiteral("since"); }
 static inline QString flagsAttribute() { return QStringLiteral("flags"); }
 
-static QList<CustomConversion*> customConversionsForReview = QList<CustomConversion*>();
+static QVector<CustomConversion *> customConversionsForReview;
 
 Handler::Handler(TypeDatabase* database, bool generate)
             : m_database(database), m_generate(generate ? TypeEntry::GenerateAll : TypeEntry::GenerateForSubclass)
@@ -209,8 +210,9 @@ bool Handler::endElement(const QStringRef &localName)
         if (m_generate == TypeEntry::GenerateAll) {
             TypeDatabase::instance()->addGlobalUserFunctions(m_contextStack.top()->addedFunctions);
             TypeDatabase::instance()->addGlobalUserFunctionModifications(m_contextStack.top()->functionMods);
-            foreach (CustomConversion* customConversion, customConversionsForReview) {
-                foreach (CustomConversion::TargetToNativeConversion* toNative, customConversion->targetToNativeConversions())
+            for (CustomConversion *customConversion : qAsConst(customConversionsForReview)) {
+                const CustomConversion::TargetToNativeConversions &toNatives = customConversion->targetToNativeConversions();
+                for (CustomConversion::TargetToNativeConversion *toNative : toNatives)
                     toNative->setSourceType(m_database->findType(toNative->sourceTypeName()));
             }
         }
@@ -493,7 +495,8 @@ static QString getNamePrefix(StackElement* element)
 static QString checkSignatureError(const QString& signature, const QString& tag)
 {
     QString funcName = signature.left(signature.indexOf(QLatin1Char('('))).trimmed();
-    static QRegExp whiteSpace(QLatin1String("\\s"));
+    static const QRegularExpression whiteSpace(QStringLiteral("\\s"));
+    Q_ASSERT(whiteSpace.isValid());
     if (!funcName.startsWith(QLatin1String("operator ")) && funcName.contains(whiteSpace)) {
         return QString::fromLatin1("Error in <%1> tag signature attribute '%2'.\n"
                                    "White spaces aren't allowed in function names, "
@@ -725,8 +728,9 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
             }
             QString rename = attributes[QLatin1String("rename")];
             if (!rename.isEmpty()) {
-                static QRegExp functionNameRegExp(QLatin1String("^[a-zA-Z_][a-zA-Z0-9_]*$"));
-                if (!functionNameRegExp.exactMatch(rename)) {
+                static const QRegularExpression functionNameRegExp(QLatin1String("^[a-zA-Z_][a-zA-Z0-9_]*$"));
+                Q_ASSERT(functionNameRegExp.isValid());
+                if (!functionNameRegExp.match(rename).hasMatch()) {
                     m_error = QLatin1String("can not rename '") + signature + QLatin1String("', '")
                               + rename + QLatin1String("' is not a valid function name");
                     return false;
@@ -850,7 +854,8 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
             // put in the flags parallel...
             const QString flagNames = attributes.value(flagsAttribute());
             if (!flagNames.isEmpty()) {
-                foreach (const QString &flagName, flagNames.split(QLatin1Char(',')))
+                const QStringList &flagNameList = flagNames.split(QLatin1Char(','));
+                for (const QString &flagName : flagNameList)
                     addFlags(name, flagName.trimmed(), attributes, since);
             }
         }
@@ -1746,8 +1751,8 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
 
             if (rc.action == ReferenceCount::Invalid) {
                 m_error = QLatin1String("unrecognized value for action attribute. supported actions:");
-                foreach (const QString &action, actions.keys())
-                    m_error += QLatin1Char(' ') + action;
+                for (QHash<QString, ReferenceCount::Action>::const_iterator it = actions.cbegin(), end = actions.cend(); it != end; ++it)
+                    m_error += QLatin1Char(' ') + it.key();
             }
 
             m_contextStack.top()->functionMods.last().argument_mods.last().referenceCounts.append(rc);
@@ -2172,7 +2177,7 @@ QString TemplateInstance::expandCode() const
 QString CodeSnipAbstract::code() const
 {
     QString res;
-    foreach (const CodeSnipFragment &codeFrag, codeList)
+    for (const CodeSnipFragment &codeFrag : codeList)
         res.append(codeFrag.code());
 
     return res;
@@ -2205,7 +2210,7 @@ QString FunctionModification::toString() const
     if (modifiers & Writable) str += QLatin1String("writable");
 
     if (modifiers & CodeInjection) {
-        foreach (const CodeSnip &s, snips) {
+        for (const CodeSnip &s : snips) {
             str += QLatin1String("\n//code injection:\n");
             str += s.code();
         }
@@ -2254,7 +2259,8 @@ bool FunctionModification::operator==(const FunctionModification& other) const
 static AddedFunction::TypeInfo parseType(const QString& signature, int startPos = 0, int* endPos = 0)
 {
     AddedFunction::TypeInfo result;
-    QRegExp regex(QLatin1String("\\w"));
+    static const QRegularExpression regex(QLatin1String("\\w"));
+    Q_ASSERT(regex.isValid());
     int length = signature.length();
     int start = signature.indexOf(regex, startPos);
     if (start == -1) {
@@ -2563,9 +2569,7 @@ CustomConversion::CustomConversion(TypeEntry* ownerType)
 
 CustomConversion::~CustomConversion()
 {
-    foreach (TargetToNativeConversion* targetToNativeConversion, m_d->targetToNativeConversions)
-        delete targetToNativeConversion;
-    m_d->targetToNativeConversions.clear();
+    qDeleteAll(m_d->targetToNativeConversions);
     delete m_d;
 }
 

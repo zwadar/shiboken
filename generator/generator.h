@@ -30,6 +30,7 @@
 #define GENERATOR_H
 
 #include <abstractmetalang_typedefs.h>
+#include <typedatabase_typedefs.h>
 #include <dependency.h>
 #include <QtCore/QObject>
 #include <QtCore/QSharedPointer>
@@ -168,10 +169,10 @@ public:
     AbstractMetaEnumList globalEnums() const;
 
     /// Returns all primitive types found by APIExtractor
-    QList<const PrimitiveTypeEntry*> primitiveTypes() const;
+    PrimitiveTypeEntryList primitiveTypes() const;
 
     /// Returns all container types found by APIExtractor
-    QList<const ContainerTypeEntry*> containerTypes() const;
+    ContainerTypeEntryList containerTypes() const;
 
     /// Returns an AbstractMetaEnum for a given EnumTypeEntry, or NULL if not found.
     const AbstractMetaEnum* findAbstractMetaEnum(const EnumTypeEntry* typeEntry) const;
@@ -358,8 +359,8 @@ protected:
     */
     virtual QString subDirectoryForPackage(QString packageName = QString()) const;
 
-    QList<const AbstractMetaType*> instantiatedContainers() const;
-    QList<const AbstractMetaType*> instantiatedSmartPointers() const;
+    QVector<const AbstractMetaType*> instantiatedContainers() const;
+    QVector<const AbstractMetaType*> instantiatedSmartPointers() const;
 
     static QString getSimplifiedContainerTypeName(const AbstractMetaType *type);
     void addInstantiatedContainersAndSmartPointers(const AbstractMetaType *type,

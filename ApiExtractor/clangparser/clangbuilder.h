@@ -1,7 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2016 The Qt Company Ltd.
-** Copyright (C) 2002-2005 Roberto Raggi <roberto@kdevelop.org>
+** Copyright (C) 2017 The Qt Company Ltd.
 ** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of PySide2.
@@ -27,18 +26,33 @@
 **
 ****************************************************************************/
 
-#ifndef PP_FWD_H
-#define PP_FWD_H
+#ifndef CLANGBUILDER_H
+#define CLANGBUILDER_H
 
-namespace rpp
-{
+#include "clangparser.h"
 
-template <typename _CharT> class pp_string;
+#include <codemodel_fwd.h>
 
-typedef pp_string<char> pp_fast_string;
+namespace clang {
 
-} // namespace rpp
+class BuilderPrivate;
 
-#endif // PP_FWD_H
+class Builder : public BaseVisitor {
+public:
+    Builder();
+    ~Builder();
 
-// kate: space-indent on; indent-width 2; replace-tabs on;
+    bool visitLocation(const CXSourceLocation &location) const override;
+
+    StartTokenResult startToken(const CXCursor &cursor) override;
+    bool endToken(const CXCursor &cursor) override;
+
+    FileModelItem dom() const;
+
+private:
+    BuilderPrivate *d;
+};
+
+} // namespace clang
+
+#endif // CLANGBUILDER_H

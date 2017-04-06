@@ -38,6 +38,7 @@
 #include <QtCore/QString>
 #include <QtCore/QStringList>
 #include <QtCore/QMap>
+#include <QtCore/QVector>
 
 //Used to identify the conversion rule to avoid break API
 #define TARGET_CONVERSION_RULE_FLAG "0"
@@ -103,6 +104,7 @@ private:
     TemplateInstance *m_instance;
 
 public:
+    CodeSnipFragment() : m_instance(0) {}
     CodeSnipFragment(const QString &code)
         : m_code(code),
           m_instance(0) {}
@@ -126,7 +128,7 @@ public:
         codeList.append(CodeSnipFragment(ti));
     }
 
-    QList<CodeSnipFragment> codeList;
+    QVector<CodeSnipFragment> codeList;
 };
 
 class CustomFunction : public CodeSnipAbstract
@@ -194,6 +196,7 @@ private:
 class CodeSnip : public CodeSnipAbstract
 {
 public:
+    CodeSnip() : language(TypeSystem::TargetLangCode), version(0) {}
     CodeSnip(double vr) : language(TypeSystem::TargetLangCode), version(vr) { }
     CodeSnip(double vr, TypeSystem::Language lang) : language(lang), version(vr) { }
 
@@ -205,6 +208,8 @@ public:
 
 struct ArgumentModification
 {
+    ArgumentModification() : removedDefaultExpression(false), removed(false),
+        noNullPointers(false), index(-1), version(0) {}
     ArgumentModification(int idx, double vr)
             : removedDefaultExpression(false), removed(false),
               noNullPointers(false), index(idx), version(vr) {}
@@ -219,7 +224,7 @@ struct ArgumentModification
     int index;
 
     // Reference count flags for this argument
-    QList<ReferenceCount> referenceCounts;
+    QVector<ReferenceCount> referenceCounts;
 
     // The text given for the new type of the argument
     QString modified_type;
@@ -344,6 +349,7 @@ struct Modification
 
 struct FunctionModification: public Modification
 {
+    FunctionModification() : m_thread(false), m_allowThread(false), m_version(0) {}
     FunctionModification(double vr) : m_thread(false), m_allowThread(false), m_version(vr) {}
 
     bool isCodeInjection() const
@@ -381,11 +387,9 @@ struct FunctionModification: public Modification
     QString association;
     CodeSnipList snips;
 
-    QList<ArgumentModification> argument_mods;
+    QVector<ArgumentModification> argument_mods;
 
 private:
-    FunctionModification() {}
-
     bool m_thread;
     bool m_allowThread;
     double m_version;
@@ -440,6 +444,7 @@ struct AddedFunction
 
     /// Creates a new AddedFunction with a signature and a return type.
     AddedFunction(QString signature, QString returnType, double vr);
+    AddedFunction() : m_access(Protected), m_isConst(false), m_isStatic(false), m_version(0) {}
 
     /// Returns the function name.
     QString name() const
@@ -466,7 +471,7 @@ struct AddedFunction
     }
 
     /// Returns a list of argument type infos.
-    QList<TypeInfo> arguments() const
+    QVector<TypeInfo> arguments() const
     {
         return m_arguments;
     }
@@ -496,7 +501,7 @@ struct AddedFunction
 private:
     QString m_name;
     Access m_access;
-    QList<TypeInfo> m_arguments;
+    QVector<TypeInfo> m_arguments;
     TypeInfo m_returnType;
     bool m_isConst;
     bool m_isStatic;
@@ -525,6 +530,7 @@ class ObjectTypeEntry;
 class DocModification
 {
 public:
+    DocModification() : format(TypeSystem::NativeCode), m_mode(TypeSystem::DocModificationXPathReplace), m_version(0) {}
     DocModification(const QString& xpath, const QString& signature, double vr)
             : format(TypeSystem::NativeCode), m_mode(TypeSystem::DocModificationXPathReplace),
               m_xpath(xpath), m_signature(signature), m_version(vr) {}
@@ -1004,11 +1010,11 @@ public:
         return m_nestedType;
     }
 
-    QString targetLangName() const
+    QString targetLangName() const override
     {
         return m_nestedType->targetLangName() + QLatin1String("[]");
     }
-    QString targetLangApiName() const
+    QString targetLangApiName() const override
     {
         if (m_nestedType->isPrimitive())
             return m_nestedType->targetLangApiName() + QLatin1String("Array");
@@ -1032,7 +1038,7 @@ public:
     {
     }
 
-    QString targetLangName() const
+    QString targetLangName() const override
     {
         return m_targetLangName;
     }
@@ -1041,7 +1047,7 @@ public:
         m_targetLangName  = targetLangName;
     }
 
-    QString targetLangApiName() const
+    QString targetLangApiName() const override
     {
         return m_targetLangApiName;
     }
@@ -1088,26 +1094,26 @@ public:
      */
     PrimitiveTypeEntry* basicReferencedTypeEntry() const;
 
-    virtual bool preferredConversion() const
+    bool preferredConversion() const override
     {
         return m_preferredConversion;
     }
-    virtual void setPreferredConversion(bool b)
+    void setPreferredConversion(bool b) override
     {
         m_preferredConversion = b;
     }
 
-    virtual bool preferredTargetLangType() const
+    bool preferredTargetLangType() const
     {
         return m_preferredTargetLangType;
     }
-    virtual void setPreferredTargetLangType(bool b)
+    void setPreferredTargetLangType(bool b)
     {
         m_preferredTargetLangType = b;
     }
 
     void setTargetLangPackage(const QString& package);
-    QString targetLangPackage() const;
+    QString targetLangPackage() const override;
 private:
     QString m_targetLangName;
     QString m_targetLangApiName;
@@ -1119,6 +1125,7 @@ private:
 
 struct EnumValueRedirection
 {
+    EnumValueRedirection() {}
     EnumValueRedirection(const QString &rej, const QString &us)
             : rejected(rej),
             used(us)
@@ -1157,7 +1164,7 @@ public:
         return m_targetLangName;
     }
     QString targetLangQualifier() const;
-    QString qualifiedTargetLangName() const
+    QString qualifiedTargetLangName() const override
     {
         QString qualifiedName;
         QString pkg = targetLangPackage();
@@ -1172,7 +1179,7 @@ public:
         return qualifiedName;
     }
 
-    QString targetLangApiName() const;
+    QString targetLangApiName() const override;
 
     QString qualifier() const
     {
@@ -1183,7 +1190,7 @@ public:
         m_qualifier = q;
     }
 
-    virtual bool preferredConversion() const
+    bool preferredConversion() const override
     {
         return false;
     }
@@ -1272,7 +1279,7 @@ private:
     QString m_upperBound;
 
     QStringList m_rejectedEnums;
-    QList<EnumValueRedirection> m_enumRedirections;
+    QVector<EnumValueRedirection> m_enumRedirections;
 
     FlagsTypeEntry *m_flags;
 
@@ -1303,13 +1310,13 @@ public:
     {
     }
 
-    QString qualifiedTargetLangName() const;
-    QString targetLangName() const
+    QString qualifiedTargetLangName() const override;
+    QString targetLangName() const override
     {
         return m_targetLangName;
     }
-    QString targetLangApiName() const;
-    virtual bool preferredConversion() const
+    QString targetLangApiName() const override;
+    bool preferredConversion() const override
     {
         return false;
     }
@@ -1346,7 +1353,7 @@ public:
         m_enum = e;
     }
 
-    QString targetLangPackage() const
+    QString targetLangPackage() const override
     {
         return m_enum->targetLangPackage();
     }
@@ -1414,12 +1421,12 @@ public:
         m_lookupName = name;
     }
 
-    virtual QString lookupName() const
+    QString lookupName() const override
     {
         return m_lookupName.isEmpty() ? targetLangName() : m_lookupName;
     }
 
-    QString targetLangApiName() const;
+    QString targetLangApiName() const override;
 
     void setTypeFlags(TypeFlags flags)
     {
@@ -1495,7 +1502,7 @@ public:
         m_defaultSuperclass = sc;
     }
 
-    virtual QString qualifiedCppName() const
+    QString qualifiedCppName() const override
     {
         return m_qualifiedCppName;
     }
@@ -1547,7 +1554,7 @@ public:
         m_targetType = code;
     }
 
-    QString targetLangName() const
+    QString targetLangName() const override
     {
         return m_targetLangName.isEmpty()
                ? TypeEntry::targetLangName()
@@ -1728,12 +1735,12 @@ class ValueTypeEntry : public ComplexTypeEntry
 public:
     ValueTypeEntry(const QString &name, double vr) : ComplexTypeEntry(name, BasicValueType, vr) { }
 
-    bool isValue() const
+    bool isValue() const override
     {
         return true;
     }
 
-    virtual bool isNativeIdBased() const
+    bool isNativeIdBased() const override
     {
         return true;
     }
@@ -1752,11 +1759,11 @@ public:
         setCodeGeneration(GenerateNothing);
     }
 
-    QString targetLangApiName() const;
-    QString targetLangName() const;
-    QString targetLangPackage() const;
+    QString targetLangApiName() const override;
+    QString targetLangName() const override;
+    QString targetLangPackage() const override;
 
-    virtual bool isNativeIdBased() const
+    bool isNativeIdBased() const override
     {
         return false;
     }
@@ -1770,14 +1777,14 @@ public:
         setCodeGeneration(GenerateNothing);
     }
 
-    QString targetLangApiName() const;
-    QString targetLangName() const;
-    QString targetLangPackage() const
+    QString targetLangApiName() const override;
+    QString targetLangName() const override;
+    QString targetLangPackage() const override
     {
         return QString();
     }
 
-    virtual bool isNativeIdBased() const
+    bool isNativeIdBased() const override
     {
         return false;
     }
@@ -1788,11 +1795,11 @@ class VariantTypeEntry: public ValueTypeEntry
 public:
     VariantTypeEntry(const QString &name, double vr) : ValueTypeEntry(name, VariantType, vr) { }
 
-    QString targetLangApiName() const;
-    QString targetLangName() const;
-    QString targetLangPackage() const;
+    QString targetLangApiName() const override;
+    QString targetLangName() const override;
+    QString targetLangPackage() const override;
 
-    virtual bool isNativeIdBased() const
+    bool isNativeIdBased() const override
     {
         return false;
     }
@@ -1819,11 +1826,11 @@ public:
         m_origin = origin;
     }
 
-    virtual bool isNativeIdBased() const
+    bool isNativeIdBased() const override
     {
         return true;
     }
-    virtual QString qualifiedCppName() const
+    QString qualifiedCppName() const override
     {
         const int len = ComplexTypeEntry::qualifiedCppName().length() - interfaceName(QString()).length();
         return ComplexTypeEntry::qualifiedCppName().left(len);
@@ -1875,7 +1882,7 @@ public:
         m_interface = entry;
     }
 
-    virtual bool isNativeIdBased() const
+    bool isNativeIdBased() const override
     {
         return true;
     }
@@ -1932,7 +1939,7 @@ public:
     bool replaceOriginalTargetToNativeConversions() const;
     void setReplaceOriginalTargetToNativeConversions(bool replaceOriginalTargetToNativeConversions);
 
-    typedef QList<TargetToNativeConversion*> TargetToNativeConversions;
+    typedef QVector<TargetToNativeConversion*> TargetToNativeConversions;
     bool hasTargetToNativeConversions() const;
     TargetToNativeConversions& targetToNativeConversions();
     const TargetToNativeConversions& targetToNativeConversions() const;

@@ -35,6 +35,7 @@
 
 #include <QtCore/QDir>
 #include <QtCore/QDebug>
+#include <QtCore/QRegularExpression>
 #include <limits>
 #include <memory>
 
@@ -53,6 +54,11 @@ QHash<QString, QString> ShibokenGenerator::m_pythonOperators = QHash<QString, QS
 QHash<QString, QString> ShibokenGenerator::m_formatUnits = QHash<QString, QString>();
 QHash<QString, QString> ShibokenGenerator::m_tpFuncs = QHash<QString, QString>();
 QStringList ShibokenGenerator::m_knownPythonTypes = QStringList();
+
+static QRegularExpression placeHolderRegex(int index)
+{
+    return QRegularExpression(QLatin1Char('%') + QString::number(index) + QStringLiteral("\\b"));
+}
 
 static QString resolveScopePrefix(const AbstractMetaClass* scope, const QString& value)
 {
@@ -87,10 +93,10 @@ ShibokenGenerator::ShibokenGenerator() : Generator()
     m_typeSystemConvName[TypeSystemIsConvertibleFunction] = QLatin1String("isConvertible");
     m_typeSystemConvName[TypeSystemToCppFunction]         = QLatin1String("toCpp");
     m_typeSystemConvName[TypeSystemToPythonFunction]      = QLatin1String("toPython");
-    m_typeSystemConvRegEx[TypeSystemCheckFunction]         = QRegExp(QLatin1String(CHECKTYPE_REGEX));
-    m_typeSystemConvRegEx[TypeSystemIsConvertibleFunction] = QRegExp(QLatin1String(ISCONVERTIBLE_REGEX));
-    m_typeSystemConvRegEx[TypeSystemToPythonFunction]      = QRegExp(QLatin1String(CONVERTTOPYTHON_REGEX));
-    m_typeSystemConvRegEx[TypeSystemToCppFunction]         = QRegExp(QLatin1String(CONVERTTOCPP_REGEX));
+    m_typeSystemConvRegEx[TypeSystemCheckFunction]         = QRegularExpression(QLatin1String(CHECKTYPE_REGEX));
+    m_typeSystemConvRegEx[TypeSystemIsConvertibleFunction] = QRegularExpression(QLatin1String(ISCONVERTIBLE_REGEX));
+    m_typeSystemConvRegEx[TypeSystemToPythonFunction]      = QRegularExpression(QLatin1String(CONVERTTOPYTHON_REGEX));
+    m_typeSystemConvRegEx[TypeSystemToCppFunction]         = QRegularExpression(QLatin1String(CONVERTTOCPP_REGEX));
 }
 
 ShibokenGenerator::~ShibokenGenerator()
@@ -243,7 +249,8 @@ bool ShibokenGenerator::shouldGenerateCppWrapper(const AbstractMetaClass* metaCl
         if (!result && metaClass->hasProtectedFunctions()) {
             int protectedFunctions = 0;
             int protectedOperators = 0;
-            foreach (const AbstractMetaFunction* func, metaClass->functions()) {
+            const AbstractMetaFunctionList &funcs = metaClass->functions();
+            for (const AbstractMetaFunction *func : funcs) {
                 if (!func->isProtected() || func->isSignal() || func->isModifiedRemoved())
                     continue;
                 else if (func->isOperatorOverload())
@@ -265,7 +272,8 @@ void ShibokenGenerator::lookForEnumsInClassesNotToBeGenerated(AbstractMetaEnumLi
         return;
 
     if (metaClass->typeEntry()->codeGeneration() == TypeEntry::GenerateForSubclass) {
-        foreach (const AbstractMetaEnum* metaEnum, metaClass->enums()) {
+        const AbstractMetaEnumList &enums = metaClass->enums();
+        for (const AbstractMetaEnum *metaEnum : enums) {
             if (metaEnum->isPrivate() || metaEnum->typeEntry()->codeGeneration() == TypeEntry::GenerateForSubclass)
                 continue;
             if (!enumList.contains(const_cast<AbstractMetaEnum*>(metaEnum)))
@@ -410,9 +418,10 @@ static QString searchForEnumScope(const AbstractMetaClass* metaClass, const QStr
 
     if (!metaClass)
         return QString();
-
-    foreach (const AbstractMetaEnum* metaEnum, metaClass->enums()) {
-        foreach (const AbstractMetaEnumValue* enumValue, metaEnum->values()) {
+    const AbstractMetaEnumList &enums = metaClass->enums();
+    for (const AbstractMetaEnum* metaEnum : enums) {
+        const AbstractMetaEnumValueList &values = metaEnum->values();
+        for (const AbstractMetaEnumValue *enumValue : values) {
             if (enumValueName == enumValue->name())
                 return metaClass->qualifiedCppName();
         }
@@ -436,7 +445,14 @@ QString ShibokenGenerator::guessScopeForDefaultValue(const AbstractMetaFunction*
     if (isPointer(arg->type()))
         return value;
 
-    static QRegExp enumValueRegEx(QLatin1String("^([A-Za-z_]\\w*)?$"));
+    static const QRegularExpression enumValueRegEx(QStringLiteral("^([A-Za-z_]\\w*)?$"));
+    Q_ASSERT(enumValueRegEx.isValid());
+    // Do not qualify macros by class name, eg QSGGeometry(..., int t = GL_UNSIGNED_SHORT);
+    static const QRegularExpression macroRegEx(QStringLiteral("^[A-Z_][A-Z0-9_]*$"));
+    Q_ASSERT(macroRegEx.isValid());
+    if (arg->type()->isPrimitive() && macroRegEx.match(value).hasMatch())
+        return value;
+
     QString prefix;
     QString suffix;
 
@@ -445,8 +461,9 @@ QString ShibokenGenerator::guessScopeForDefaultValue(const AbstractMetaFunction*
         if (metaEnum)
             prefix = resolveScopePrefix(metaEnum->enclosingClass(), value);
     } else if (arg->type()->isFlags()) {
-        static QRegExp numberRegEx(QLatin1String("^\\d+$")); // Numbers to flags
-        if (numberRegEx.exactMatch(value)) {
+        static const QRegularExpression numberRegEx(QStringLiteral("^\\d+$")); // Numbers to flags
+        Q_ASSERT(numberRegEx.isValid());
+        if (numberRegEx.match(value).hasMatch()) {
             QString typeName = translateTypeForWrapperMethod(arg->type(), func->implementingClass());
             if (arg->type()->isConstant())
                 typeName.remove(0, sizeof("const ") / sizeof(char) - 1);
@@ -464,16 +481,18 @@ QString ShibokenGenerator::guessScopeForDefaultValue(const AbstractMetaFunction*
             suffix = QLatin1Char(')');
         }
 
-        static QRegExp enumCombinationRegEx(QLatin1String("^([A-Za-z_][\\w:]*)\\(([^,\\(\\)]*)\\)$")); // FlagName(EnumItem|EnumItem|...)
-        if (prefix.isEmpty() && enumCombinationRegEx.indexIn(value) != -1) {
-            QString flagName = enumCombinationRegEx.cap(1);
-            QStringList enumItems = enumCombinationRegEx.cap(2).split(QLatin1Char('|'));
+        static const QRegularExpression enumCombinationRegEx(QStringLiteral("^([A-Za-z_][\\w:]*)\\(([^,\\(\\)]*)\\)$")); // FlagName(EnumItem|EnumItem|...)
+        Q_ASSERT(enumCombinationRegEx.isValid());
+        const QRegularExpressionMatch match = enumCombinationRegEx.match(value);
+        if (prefix.isEmpty() && match.hasMatch()) {
+            QString flagName = match.captured(1);
+            QStringList enumItems = match.captured(2).split(QLatin1Char('|'));
             QString scope = searchForEnumScope(func->implementingClass(), enumItems.first());
             if (!scope.isEmpty())
                 scope.append(QLatin1String("::"));
 
             QStringList fixedEnumItems;
-            foreach (const QString& enumItem, enumItems)
+            for (const QString &enumItem : qAsConst(enumItems))
                 fixedEnumItems << QString(scope + enumItem);
 
             if (!fixedEnumItems.isEmpty()) {
@@ -484,16 +503,19 @@ QString ShibokenGenerator::guessScopeForDefaultValue(const AbstractMetaFunction*
         }
     } else if (arg->type()->typeEntry()->isValue()) {
         const AbstractMetaClass *metaClass = AbstractMetaClass::findClass(classes(), arg->type()->typeEntry());
-        if (enumValueRegEx.exactMatch(value)&& value != QLatin1String("NULL"))
+        if (enumValueRegEx.match(value).hasMatch() && value != QLatin1String("NULL"))
             prefix = resolveScopePrefix(metaClass, value);
     } else if (arg->type()->isPrimitive() && arg->type()->name() == QLatin1String("int")) {
-        if (enumValueRegEx.exactMatch(value) && func->implementingClass())
+        if (enumValueRegEx.match(value).hasMatch() && func->implementingClass())
             prefix = resolveScopePrefix(func->implementingClass(), value);
     } else if(arg->type()->isPrimitive()) {
-        static QRegExp unknowArgumentRegEx(QLatin1String("^(?:[A-Za-z_][\\w:]*\\()?([A-Za-z_]\\w*)(?:\\))?$")); // [PrimitiveType(] DESIREDNAME [)]
-        if (unknowArgumentRegEx.indexIn(value) != -1 && func->implementingClass()) {
-            foreach (const AbstractMetaField* field, func->implementingClass()->fields()) {
-                if (unknowArgumentRegEx.cap(1).trimmed() == field->name()) {
+        static const QRegularExpression unknowArgumentRegEx(QStringLiteral("^(?:[A-Za-z_][\\w:]*\\()?([A-Za-z_]\\w*)(?:\\))?$")); // [PrimitiveType(] DESIREDNAME [)]
+        Q_ASSERT(unknowArgumentRegEx.isValid());
+        const QRegularExpressionMatch match = unknowArgumentRegEx.match(value);
+        if (match.hasMatch() && func->implementingClass()) {
+            const AbstractMetaFieldList &fields = func->implementingClass()->fields();
+            for (const AbstractMetaField *field : fields) {
+                if (match.captured(1).trimmed() == field->name()) {
                     QString fieldName = field->name();
                     if (field->isStatic()) {
                         prefix = resolveScopePrefix(func->implementingClass(), value);
@@ -502,7 +524,7 @@ QString ShibokenGenerator::guessScopeForDefaultValue(const AbstractMetaFunction*
                     } else {
                         fieldName.prepend(QLatin1String(CPP_SELF_VAR "->"));
                     }
-                    value.replace(unknowArgumentRegEx.cap(1), fieldName);
+                    value.replace(match.captured(1), fieldName);
                     break;
                 }
             }
@@ -614,8 +636,9 @@ bool ShibokenGenerator::shouldRejectNullPointerArgument(const AbstractMetaFuncti
         return false;
     if (func->argumentRemoved(argIndex + 1))
         return false;
-    foreach (const FunctionModification &funcMod, func->modifications()) {
-        foreach (const ArgumentModification &argMod, funcMod.argument_mods) {
+    const FunctionModificationList &mods = func->modifications();
+    for (const FunctionModification &funcMod : mods) {
+        for (const ArgumentModification &argMod : funcMod.argument_mods) {
             if (argMod.index == argIndex + 1 && argMod.noNullPointers)
                 return true;
         }
@@ -627,7 +650,8 @@ QString ShibokenGenerator::getFormatUnitString(const AbstractMetaFunction* func,
 {
     QString result;
     const char objType = (incRef ? 'O' : 'N');
-    foreach (const AbstractMetaArgument* arg, func->arguments()) {
+    const AbstractMetaArgumentList &arguments = func->arguments();
+    for (const AbstractMetaArgument *arg : arguments) {
         if (func->argumentRemoved(arg->argumentIndex() + 1))
             continue;
 
@@ -1046,7 +1070,8 @@ bool ShibokenGenerator::shouldDereferenceAbstractMetaTypePointer(const AbstractM
 
 bool ShibokenGenerator::visibilityModifiedToPrivate(const AbstractMetaFunction* func)
 {
-    foreach (const FunctionModification &mod, func->modifications()) {
+    const FunctionModificationList &mods = func->modifications();
+    for (const FunctionModification &mod : mods) {
         if (mod.modifiers & Modification::Private)
             return true;
     }
@@ -1302,8 +1327,6 @@ QString ShibokenGenerator::argumentString(const AbstractMetaFunction *func,
         arg += argument->name();
     }
 
-    QList<ReferenceCount> referenceCounts;
-    referenceCounts = func->referenceCounts(func->implementingClass(), argument->argumentIndex() + 1);
     if ((options & Generator::SkipDefaultValues) != Generator::SkipDefaultValues &&
         !argument->originalDefaultValueExpression().isEmpty())
     {
@@ -1437,7 +1460,8 @@ void ShibokenGenerator::writeUnusedVariableCast(QTextStream& s, const QString& v
 AbstractMetaFunctionList ShibokenGenerator::filterFunctions(const AbstractMetaClass* metaClass)
 {
     AbstractMetaFunctionList result;
-    foreach (AbstractMetaFunction *func, metaClass->functions()) {
+    const AbstractMetaFunctionList &funcs = metaClass->functions();
+    for (AbstractMetaFunction *func : funcs) {
         if (func->isSignal() || func->isDestructor() || func->usesRValueReferences()
             || (func->isModifiedRemoved() && !func->isAbstract()
                 && (!avoidProtectedHack() || !func->isProtected())))
@@ -1450,11 +1474,13 @@ AbstractMetaFunctionList ShibokenGenerator::filterFunctions(const AbstractMetaCl
 ShibokenGenerator::ExtendedConverterData ShibokenGenerator::getExtendedConverters() const
 {
     ExtendedConverterData extConvs;
-    foreach (const AbstractMetaClass* metaClass, classes()) {
+    const AbstractMetaClassList &classList = classes();
+    for (const AbstractMetaClass *metaClass : classList) {
         // Use only the classes for the current module.
         if (!shouldGenerate(metaClass))
             continue;
-        foreach (AbstractMetaFunction* convOp, metaClass->operatorOverloads(AbstractMetaClass::ConversionOp)) {
+        const AbstractMetaFunctionList &overloads = metaClass->operatorOverloads(AbstractMetaClass::ConversionOp);
+        for (AbstractMetaFunction *convOp : overloads) {
             // Get only the conversion operators that return a type from another module,
             // that are value-types and were not removed in the type system.
             const TypeEntry* convType = convOp->type()->typeEntry();
@@ -1468,10 +1494,11 @@ ShibokenGenerator::ExtendedConverterData ShibokenGenerator::getExtendedConverter
     return extConvs;
 }
 
-QList<const CustomConversion*> ShibokenGenerator::getPrimitiveCustomConversions()
+QVector<const CustomConversion *> ShibokenGenerator::getPrimitiveCustomConversions()
 {
-    QList<const CustomConversion*> conversions;
-    foreach (const PrimitiveTypeEntry* type, primitiveTypes()) {
+    QVector<const CustomConversion*> conversions;
+    const PrimitiveTypeEntryList &primitiveTypeList = primitiveTypes();
+    for (const PrimitiveTypeEntry *type : primitiveTypeList) {
         if (!shouldGenerateTypeEntry(type) || !isUserPrimitive(type) || !type->customConversion())
             continue;
 
@@ -1514,7 +1541,7 @@ QString ShibokenGenerator::getCodeSnippets(const CodeSnipList& codeSnips,
 {
     QString code;
     QTextStream c(&code);
-    foreach (const CodeSnip &snip, codeSnips) {
+    for (const CodeSnip &snip : codeSnips) {
         if ((position != TypeSystem::CodeSnipPositionAny && snip.position != position) || !(snip.language & language))
             continue;
         QString snipCode;
@@ -1639,15 +1666,19 @@ void ShibokenGenerator::writeCodeSnips(QTextStream& s,
     // Replace %PYARG_# variables.
     code.replace(QLatin1String("%PYARG_0"), QLatin1String(PYTHON_RETURN_VAR));
 
-    static QRegExp pyArgsRegex(QLatin1String("%PYARG_(\\d+)"));
+    static const QRegularExpression pyArgsRegex(QStringLiteral("%PYARG_(\\d+)"));
+    Q_ASSERT(pyArgsRegex.isValid());
     if (language == TypeSystem::TargetLangCode) {
         if (usePyArgs) {
             code.replace(pyArgsRegex, QLatin1String(PYTHON_ARGS"[\\1-1]"));
         } else {
-            static QRegExp pyArgsRegexCheck(QLatin1String("%PYARG_([2-9]+)"));
-            if (pyArgsRegexCheck.indexIn(code) != -1) {
+            static const QRegularExpression pyArgsRegexCheck(QStringLiteral("%PYARG_([2-9]+)"));
+            Q_ASSERT(pyArgsRegexCheck.isValid());
+            const QRegularExpressionMatch match = pyArgsRegexCheck.match(code);
+            if (match.hasMatch()) {
                 qCWarning(lcShiboken).noquote().nospace()
-                    << "Wrong index for %PYARG variable (" << pyArgsRegexCheck.cap(1) << ") on " << func->signature();
+                    << "Wrong index for %PYARG variable (" << match.captured(1)
+                    << ") on " << func->signature();
                 return;
             }
             code.replace(QLatin1String("%PYARG_1"), QLatin1String(PYTHON_ARG));
@@ -1655,25 +1686,28 @@ void ShibokenGenerator::writeCodeSnips(QTextStream& s,
     } else {
         // Replaces the simplest case of attribution to a
         // Python argument on the binding virtual method.
-        static QRegExp pyArgsAttributionRegex(QLatin1String("%PYARG_(\\d+)\\s*=[^=]\\s*([^;]+)"));
+        static const QRegularExpression pyArgsAttributionRegex(QStringLiteral("%PYARG_(\\d+)\\s*=[^=]\\s*([^;]+)"));
+        Q_ASSERT(pyArgsAttributionRegex.isValid());
         code.replace(pyArgsAttributionRegex, QLatin1String("PyTuple_SET_ITEM(" PYTHON_ARGS ", \\1-1, \\2)"));
         code.replace(pyArgsRegex, QLatin1String("PyTuple_GET_ITEM(" PYTHON_ARGS ", \\1-1)"));
     }
 
     // Replace %ARG#_TYPE variables.
-    foreach (const AbstractMetaArgument* arg, func->arguments()) {
+    const AbstractMetaArgumentList &arguments = func->arguments();
+    for (const AbstractMetaArgument *arg : arguments) {
         QString argTypeVar = QStringLiteral("%ARG%1_TYPE").arg(arg->argumentIndex() + 1);
         QString argTypeVal = arg->type()->cppSignature();
         code.replace(argTypeVar, argTypeVal);
     }
 
-    int pos = 0;
-    static QRegExp cppArgTypeRegexCheck(QLatin1String("%ARG(\\d+)_TYPE"));
-    while ((pos = cppArgTypeRegexCheck.indexIn(code, pos)) != -1) {
+    static const QRegularExpression cppArgTypeRegexCheck(QStringLiteral("%ARG(\\d+)_TYPE"));
+    Q_ASSERT(cppArgTypeRegexCheck.isValid());
+    QRegularExpressionMatchIterator rit = cppArgTypeRegexCheck.globalMatch(code);
+    while (rit.hasNext()) {
+        QRegularExpressionMatch match = rit.next();
         qCWarning(lcShiboken).noquote().nospace()
-            << "Wrong index for %ARG#_TYPE variable (" << cppArgTypeRegexCheck.cap(1)
-            << ") on " << func->signature();
-        pos += cppArgTypeRegexCheck.matchedLength();
+                << "Wrong index for %ARG#_TYPE variable (" << match.captured(1)
+                << ") on " << func->signature();
     }
 
     // Replace template variable for return variable name.
@@ -1754,17 +1788,17 @@ void ShibokenGenerator::writeCodeSnips(QTextStream& s,
 
     // Replaces template %ARGUMENT_NAMES and %# variables by argument variables and values.
     // Replaces template variables %# for individual arguments.
-    ArgumentVarReplacementList argReplacements = getArgumentReplacement(func, usePyArgs, language, lastArg);
+    const ArgumentVarReplacementList &argReplacements = getArgumentReplacement(func, usePyArgs, language, lastArg);
 
     QStringList args;
-    foreach (const ArgumentVarReplacementPair &pair, argReplacements) {
+    for (const ArgumentVarReplacementPair &pair : argReplacements) {
         if (pair.second.startsWith(QLatin1String(CPP_ARG_REMOVED)))
             continue;
         args << pair.second;
     }
     code.replace(QLatin1String("%ARGUMENT_NAMES"), args.join(QLatin1String(", ")));
 
-    foreach (const ArgumentVarReplacementPair &pair, argReplacements) {
+    for (const ArgumentVarReplacementPair &pair : argReplacements) {
         const AbstractMetaArgument* arg = pair.first;
         int idx = arg->argumentIndex() + 1;
         AbstractMetaType* type = arg->type();
@@ -1781,7 +1815,7 @@ void ShibokenGenerator::writeCodeSnips(QTextStream& s,
             if (type->referenceType() == LValueReference || isPointer(type))
                 code.replace(QString::fromLatin1("%%1.").arg(idx), replacement + QLatin1String("->"));
         }
-        code.replace(QRegExp(QString::fromLatin1("%%1\\b").arg(idx)), pair.second);
+        code.replace(placeHolderRegex(idx), pair.second);
     }
 
     if (language == TypeSystem::NativeCode) {
@@ -1803,7 +1837,8 @@ void ShibokenGenerator::writeCodeSnips(QTextStream& s,
         // dispatcher.
         bool hasProtectedOverload = false;
         if (func->isUserAdded()) {
-            foreach (const AbstractMetaFunction* f, getFunctionOverloads(func->ownerClass(), func->name()))
+            const AbstractMetaFunctionList &funcs = getFunctionOverloads(func->ownerClass(), func->name());
+            for (const AbstractMetaFunction *f : funcs)
                 hasProtectedOverload |= f->isProtected();
         }
 
@@ -1834,8 +1869,9 @@ void ShibokenGenerator::writeCodeSnips(QTextStream& s,
 // and false if it is a variable.
 static bool isVariable(const QString& code)
 {
-    static QRegExp expr(QLatin1String("\\s*\\*?\\s*[A-Za-z_][A-Za-z_0-9.]*\\s*(?:\\[[^\\[]+\\])*"));
-    return expr.exactMatch(code.trimmed());
+    static const QRegularExpression expr(QStringLiteral("^\\s*\\*?\\s*[A-Za-z_][A-Za-z_0-9.]*\\s*(?:\\[[^\\[]+\\])*$"));
+    Q_ASSERT(expr.isValid());
+    return expr.match(code.trimmed()).hasMatch();
 }
 
 // A miniature normalizer that puts a type string into a format
@@ -1885,12 +1921,11 @@ static QString getConverterTypeSystemVariableArgument(const QString& code, int p
 typedef QPair<QString, QString> StringPair;
 void ShibokenGenerator::replaceConverterTypeSystemVariable(TypeSystemConverterVariable converterVariable, QString& code)
 {
-    QRegExp& regex = m_typeSystemConvRegEx[converterVariable];
-    int pos = 0;
-    QList<StringPair> replacements;
-    while ((pos = regex.indexIn(code, pos)) != -1) {
-        pos += regex.matchedLength();
-        QStringList list = regex.capturedTexts();
+    QVector<StringPair> replacements;
+    QRegularExpressionMatchIterator rit = m_typeSystemConvRegEx[converterVariable].globalMatch(code);
+    while (rit.hasNext()) {
+        const QRegularExpressionMatch match = rit.next();
+        const QStringList list = match.capturedTexts();
         QString conversionString = list.first();
         QString conversionTypeName = list.last();
         const AbstractMetaType* conversionType = buildAbstractMetaTypeFromString(conversionTypeName);
@@ -1904,7 +1939,7 @@ void ShibokenGenerator::replaceConverterTypeSystemVariable(TypeSystemConverterVa
         QTextStream c(&conversion);
         switch (converterVariable) {
             case TypeSystemToCppFunction: {
-                int end = pos - list.first().count();
+                int end = match.capturedStart();
                 int start = end;
                 while (start > 0 && code.at(start) != QLatin1Char('\n'))
                     --start;
@@ -1933,7 +1968,7 @@ void ShibokenGenerator::replaceConverterTypeSystemVariable(TypeSystemConverterVa
                 } else {
                     prefix = QLatin1Char('&');
                 }
-                QString arg = getConverterTypeSystemVariableArgument(code, pos);
+                QString arg = getConverterTypeSystemVariableArgument(code, match.capturedEnd());
                 conversionString += arg;
                 c << arg << ", " << prefix << '(' << varName << ')';
                 break;
@@ -1953,7 +1988,7 @@ void ShibokenGenerator::replaceConverterTypeSystemVariable(TypeSystemConverterVa
                 if (conversion.isEmpty())
                     conversion = cpythonToPythonConversionFunction(conversionType);
             default: {
-                QString arg = getConverterTypeSystemVariableArgument(code, pos);
+                QString arg = getConverterTypeSystemVariableArgument(code, match.capturedEnd());
                 conversionString += arg;
                 if (converterVariable == TypeSystemToPythonFunction && !isVariable(arg)) {
                     qFatal(qPrintable(QString::fromLatin1("Only variables are acceptable as argument to %%CONVERTTOPYTHON type system variable on code snippet: '%1'")
@@ -1969,14 +2004,14 @@ void ShibokenGenerator::replaceConverterTypeSystemVariable(TypeSystemConverterVa
         }
         replacements.append(qMakePair(conversionString, conversion));
     }
-    foreach (const StringPair &rep, replacements)
+    for (const StringPair &rep : qAsConst(replacements))
         code.replace(rep.first, rep.second);
 }
 
 bool ShibokenGenerator::injectedCodeUsesCppSelf(const AbstractMetaFunction* func)
 {
     CodeSnipList snips = func->injectedCodeSnips(TypeSystem::CodeSnipPositionAny, TypeSystem::TargetLangCode);
-    foreach (const CodeSnip &snip, snips) {
+    for (const CodeSnip &snip : qAsConst(snips)) {
         if (snip.code().contains(QLatin1String("%CPPSELF")))
             return true;
     }
@@ -1986,7 +2021,7 @@ bool ShibokenGenerator::injectedCodeUsesCppSelf(const AbstractMetaFunction* func
 bool ShibokenGenerator::injectedCodeUsesPySelf(const AbstractMetaFunction* func)
 {
     CodeSnipList snips = func->injectedCodeSnips(TypeSystem::CodeSnipPositionAny, TypeSystem::NativeCode);
-    foreach (const CodeSnip &snip, snips) {
+    for (const CodeSnip &snip : qAsConst(snips)) {
         if (snip.code().contains(QLatin1String("%PYSELF")))
             return true;
     }
@@ -2002,7 +2037,7 @@ bool ShibokenGenerator::injectedCodeCallsCppFunction(const AbstractMetaFunction*
         wrappedCtorCall = QStringLiteral("new %1(").arg(wrapperName(func->ownerClass()));
     }
     CodeSnipList snips = func->injectedCodeSnips(TypeSystem::CodeSnipPositionAny, TypeSystem::TargetLangCode);
-    foreach (const CodeSnip &snip, snips) {
+    for (const CodeSnip &snip : qAsConst(snips)) {
         if (snip.code().contains(QLatin1String("%FUNCTION_NAME(")) || snip.code().contains(funcCall)
             || (func->isConstructor()
                 && ((func->ownerClass()->isPolymorphic() && snip.code().contains(wrappedCtorCall))
@@ -2015,10 +2050,11 @@ bool ShibokenGenerator::injectedCodeCallsCppFunction(const AbstractMetaFunction*
 
 bool ShibokenGenerator::injectedCodeCallsPythonOverride(const AbstractMetaFunction* func)
 {
-    static QRegExp overrideCallRegexCheck(QLatin1String("PyObject_Call\\s*\\(\\s*%PYTHON_METHOD_OVERRIDE\\s*,"));
+    static const QRegularExpression overrideCallRegexCheck(QStringLiteral("PyObject_Call\\s*\\(\\s*%PYTHON_METHOD_OVERRIDE\\s*,"));
+    Q_ASSERT(overrideCallRegexCheck.isValid());
     CodeSnipList snips = func->injectedCodeSnips(TypeSystem::CodeSnipPositionAny, TypeSystem::NativeCode);
-    foreach (const CodeSnip &snip, snips) {
-        if (overrideCallRegexCheck.indexIn(snip.code()) != -1)
+    for (const CodeSnip &snip : qAsConst(snips)) {
+        if (snip.code().contains(overrideCallRegexCheck))
             return true;
     }
     return false;
@@ -2026,15 +2062,17 @@ bool ShibokenGenerator::injectedCodeCallsPythonOverride(const AbstractMetaFuncti
 
 bool ShibokenGenerator::injectedCodeHasReturnValueAttribution(const AbstractMetaFunction* func, TypeSystem::Language language)
 {
-    static QRegExp retValAttributionRegexCheck_native(QLatin1String("%0\\s*=[^=]\\s*.+"));
-    static QRegExp retValAttributionRegexCheck_target(QLatin1String("%PYARG_0\\s*=[^=]\\s*.+"));
+    static const QRegularExpression retValAttributionRegexCheck_native(QStringLiteral("%0\\s*=[^=]\\s*.+"));
+    Q_ASSERT(retValAttributionRegexCheck_native.isValid());
+    static const QRegularExpression retValAttributionRegexCheck_target(QStringLiteral("%PYARG_0\\s*=[^=]\\s*.+"));
+    Q_ASSERT(retValAttributionRegexCheck_target.isValid());
     CodeSnipList snips = func->injectedCodeSnips(TypeSystem::CodeSnipPositionAny, language);
-    foreach (const CodeSnip &snip, snips) {
+    for (const CodeSnip &snip : qAsConst(snips)) {
         if (language == TypeSystem::TargetLangCode) {
-            if (retValAttributionRegexCheck_target.indexIn(snip.code()) != -1)
+            if (snip.code().contains(retValAttributionRegexCheck_target))
                 return true;
         } else {
-            if (retValAttributionRegexCheck_native.indexIn(snip.code()) != -1)
+            if (snip.code().contains(retValAttributionRegexCheck_native))
                 return true;
         }
     }
@@ -2044,11 +2082,10 @@ bool ShibokenGenerator::injectedCodeHasReturnValueAttribution(const AbstractMeta
 bool ShibokenGenerator::injectedCodeUsesArgument(const AbstractMetaFunction* func, int argumentIndex)
 {
     CodeSnipList snips = func->injectedCodeSnips(TypeSystem::CodeSnipPositionAny);
-    foreach (const CodeSnip &snip, snips) {
+    const QRegularExpression argRegEx = placeHolderRegex(argumentIndex + 1);
+    for (const CodeSnip &snip : qAsConst(snips)) {
         QString code = snip.code();
-        if (code.contains(QLatin1String("%ARGUMENT_NAMES")))
-            return true;
-        if (code.contains(QRegExp(QStringLiteral("%%1\\b").arg(argumentIndex + 1))))
+        if (code.contains(QLatin1String("%ARGUMENT_NAMES")) || code.contains(argRegEx))
             return true;
     }
     return false;
@@ -2075,7 +2112,7 @@ bool ShibokenGenerator::classNeedsGetattroFunction(const AbstractMetaClass* meta
     const FunctionGroupMap &functionGroup = getFunctionGroups(metaClass);
     for (FunctionGroupMapIt it = functionGroup.cbegin(), end = functionGroup.cend(); it != end; ++it) {
         AbstractMetaFunctionList overloads;
-        foreach (AbstractMetaFunction* func, it.value()) {
+        for (AbstractMetaFunction *func : qAsConst(it.value())) {
             if (func->isAssignmentOperator() || func->isCastOperator() || func->isModifiedRemoved()
                 || func->isPrivate() || func->ownerClass() != func->implementingClass()
                 || func->isConstructor() || func->isOperatorOverload())
@@ -2106,7 +2143,7 @@ AbstractMetaFunctionList ShibokenGenerator::getMethodsWithBothStaticAndNonStatic
         const FunctionGroupMap &functionGroups = getFunctionGroups(metaClass);
         for (FunctionGroupMapIt it = functionGroups.cbegin(), end = functionGroups.cend(); it != end; ++it) {
             AbstractMetaFunctionList overloads;
-            foreach (AbstractMetaFunction* func, it.value()) {
+            for (AbstractMetaFunction *func : qAsConst(it.value())) {
                 if (func->isAssignmentOperator() || func->isCastOperator() || func->isModifiedRemoved()
                     || func->isPrivate() || func->ownerClass() != func->implementingClass()
                     || func->isConstructor() || func->isOperatorOverload())
@@ -2126,7 +2163,8 @@ AbstractMetaClassList ShibokenGenerator::getBaseClasses(const AbstractMetaClass*
 {
     AbstractMetaClassList baseClasses;
     if (metaClass) {
-        foreach (const QString &parent, metaClass->baseClassNames()) {
+        const QStringList &baseClassNames = metaClass->baseClassNames();
+        for (const QString &parent : baseClassNames) {
             AbstractMetaClass *clazz = AbstractMetaClass::findClass(classes(), parent);
             if (clazz)
                 baseClasses << clazz;
@@ -2149,7 +2187,7 @@ AbstractMetaClassList ShibokenGenerator::getAllAncestors(const AbstractMetaClass
     AbstractMetaClassList result;
     if (metaClass) {
         AbstractMetaClassList baseClasses = getBaseClasses(metaClass);
-        foreach (AbstractMetaClass* base, baseClasses) {
+        for (AbstractMetaClass *base : qAsConst(baseClasses)) {
             result.append(base);
             result.append(getAllAncestors(base));
         }
@@ -2260,7 +2298,7 @@ AbstractMetaType* ShibokenGenerator::buildAbstractMetaTypeFromString(QString typ
         metaType->setReferenceType(refType);
         metaType->setConstant(isConst);
         metaType->setTypeUsagePattern(AbstractMetaType::ContainerPattern);
-        foreach (const QString& instantiation, instantiatedTypes) {
+        for (const QString &instantiation : qAsConst(instantiatedTypes)) {
             AbstractMetaType* tmplArgType = buildAbstractMetaTypeFromString(instantiation);
             metaType->addInstantiation(tmplArgType);
         }
@@ -2295,7 +2333,7 @@ AbstractMetaType* ShibokenGenerator::buildAbstractMetaTypeFromAbstractMetaClass(
 static void dumpFunction(AbstractMetaFunctionList lst)
 {
     qDebug() << "DUMP FUNCTIONS: ";
-    foreach (AbstractMetaFunction *func, lst)
+    for (AbstractMetaFunction *func : qAsConst(lst))
         qDebug() << "*" << func->ownerClass()->name()
                         << func->signature()
                         << "Private: " << func->isPrivate()
@@ -2323,7 +2361,7 @@ QMap< QString, AbstractMetaFunctionList > ShibokenGenerator::getFunctionGroups(c
     AbstractMetaFunctionList lst = scope ? scope->functions() : globalFunctions();
 
     QMap<QString, AbstractMetaFunctionList> results;
-    foreach (AbstractMetaFunction* func, lst) {
+    for (AbstractMetaFunction *func : qAsConst(lst)) {
         if (isGroupable(func))
             results[func->name()].append(func);
     }
@@ -2335,7 +2373,7 @@ AbstractMetaFunctionList ShibokenGenerator::getFunctionOverloads(const AbstractM
     AbstractMetaFunctionList lst = scope ? scope->functions() : globalFunctions();
 
     AbstractMetaFunctionList results;
-    foreach (AbstractMetaFunction* func, lst) {
+    for (AbstractMetaFunction *func : qAsConst(lst)) {
         if (func->name() != functionName)
             continue;
         if (isGroupable(func))
@@ -2351,9 +2389,10 @@ QPair< int, int > ShibokenGenerator::getMinMaxArguments(const AbstractMetaFuncti
 
     int minArgs = std::numeric_limits<int>::max();
     int maxArgs = 0;
-    foreach (const AbstractMetaFunction* func, overloads) {
+    for (const AbstractMetaFunction* func : qAsConst(overloads)) {
         int numArgs = 0;
-        foreach (const AbstractMetaArgument* arg, func->arguments()) {
+        const AbstractMetaArgumentList &arguments = func->arguments();
+        for (const AbstractMetaArgument *arg : arguments) {
             if (!func->argumentRemoved(arg->argumentIndex() + 1))
                 numArgs++;
         }
@@ -2383,7 +2422,7 @@ QMap<QString, QString> ShibokenGenerator::options() const
 
 static void getCode(QStringList& code, const CodeSnipList& codeSnips)
 {
-    foreach (const CodeSnip& snip, codeSnips)
+    for (const CodeSnip &snip : qAsConst(codeSnips))
         code.append(snip.code());
 }
 
@@ -2402,7 +2441,7 @@ static void getCode(QStringList& code, const TypeEntry* type)
     if (toCppConversions.isEmpty())
         return;
 
-    foreach (CustomConversion::TargetToNativeConversion* toNative, toCppConversions)
+    for (CustomConversion::TargetToNativeConversion *toNative : qAsConst(toCppConversions))
         code.append(toNative->conversion());
 }
 
@@ -2417,20 +2456,23 @@ bool ShibokenGenerator::doSetup(const QMap<QString, QString>& args)
 
     TypeDatabase* td = TypeDatabase::instance();
     QStringList snips;
-    foreach (const PrimitiveTypeEntry* type, primitiveTypes())
+    const PrimitiveTypeEntryList &primitiveTypeList = primitiveTypes();
+    for (const PrimitiveTypeEntry *type : primitiveTypeList)
         getCode(snips, type);
-    foreach (const ContainerTypeEntry* type, containerTypes())
+    const ContainerTypeEntryList &containerTypeList = containerTypes();
+    for (const ContainerTypeEntry *type : containerTypeList)
         getCode(snips, type);
-    foreach (const AbstractMetaClass* metaClass, classes())
+    const AbstractMetaClassList &classList = classes();
+    for (const AbstractMetaClass *metaClass : classList)
         getCode(snips, metaClass->typeEntry());
     getCode(snips, td->findType(packageName()));
     const FunctionGroupMap &functionGroups = getFunctionGroups();
     for (FunctionGroupMapIt it = functionGroups.cbegin(), end = functionGroups.cend(); it != end; ++it) {
-        foreach (AbstractMetaFunction* func, it.value())
+        for (AbstractMetaFunction *func : it.value())
             getCode(snips, func->injectedCodeSnips());
     }
 
-    foreach (const QString& code, snips) {
+    for (const QString &code : qAsConst(snips)) {
         collectContainerTypesFromConverterMacros(code, true);
         collectContainerTypesFromConverterMacros(code, false);
     }
@@ -2500,7 +2542,8 @@ QString ShibokenGenerator::convertersVariableName(const QString& moduleName) con
 static QString processInstantiationsVariableName(const AbstractMetaType* type)
 {
     QString res = QLatin1Char('_') + _fixedCppTypeName(type->typeEntry()->qualifiedCppName()).toUpper();
-    foreach (const AbstractMetaType* instantiation, type->instantiations()) {
+    const AbstractMetaTypeList &instantiations = type->instantiations();
+    for (const AbstractMetaType  *instantiation : instantiations) {
         res += instantiation->isContainer()
                ? processInstantiationsVariableName(instantiation)
                : QLatin1Char('_') + _fixedCppTypeName(instantiation->cppSignature()).toUpper();
@@ -2515,7 +2558,8 @@ QString ShibokenGenerator::getTypeIndexVariableName(const AbstractMetaClass* met
             return QString();
         QString base = _fixedCppTypeName(templateBaseClass->typeEntry()->qualifiedCppName()).toUpper();
         QString instantiations;
-        foreach (const AbstractMetaType* instantiation, metaClass->templateBaseClassInstantiations())
+        const AbstractMetaTypeList &templateBaseClassInstantiations = metaClass->templateBaseClassInstantiations();
+        for (const AbstractMetaType *instantiation : templateBaseClassInstantiations)
             instantiations += processInstantiationsVariableName(instantiation);
         return QString::fromLatin1("SBK_%1%2_IDX").arg(base, instantiations);
     }
@@ -2579,8 +2623,9 @@ QString  ShibokenGenerator::getDefaultValue(const AbstractMetaFunction* func, co
         return arg->defaultValueExpression();
 
     //Check modifications
-    foreach(FunctionModification  m, func->modifications()) {
-        foreach(ArgumentModification am, m.argument_mods) {
+    const FunctionModificationList &mods = func->modifications();
+    for (const FunctionModification &m : mods) {
+        for (const ArgumentModification &am : m.argument_mods) {
             if (am.index == (arg->argumentIndex() + 1))
                 return am.replacedDefaultExpression;
         }

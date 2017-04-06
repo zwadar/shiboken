@@ -58,6 +58,8 @@
 
 #include "typesystem.h"
 
+#include <QtCore/QRegularExpression>
+
 class DocParser;
 class CodeSnip;
 class OverloadData;
@@ -117,7 +119,7 @@ public:
 
     void writeArgumentNames(QTextStream &s,
                             const AbstractMetaFunction* func,
-                            Options options = NoOption) const;
+                            Options options = NoOption) const override;
 
     /**
      *   Function used to write the fucntion arguments on the class buffer.
@@ -128,32 +130,32 @@ public:
      */
     void writeFunctionArguments(QTextStream &s,
                                 const AbstractMetaFunction* func,
-                                Options options = NoOption) const;
+                                Options options = NoOption) const override;
     QString functionReturnType(const AbstractMetaFunction* func, Options options = NoOption) const;
 
     /// Utility function for writeCodeSnips.
     typedef QPair<const AbstractMetaArgument*, QString> ArgumentVarReplacementPair;
-    typedef QList<ArgumentVarReplacementPair> ArgumentVarReplacementList;
+    typedef QVector<ArgumentVarReplacementPair> ArgumentVarReplacementList;
     ArgumentVarReplacementList getArgumentReplacement(const AbstractMetaFunction* func,
                                                       bool usePyArgs, TypeSystem::Language language,
                                                       const AbstractMetaArgument* lastArg);
 
     /// Write user's custom code snippets at class or module level.
     void writeCodeSnips(QTextStream& s,
-                        const QList<CodeSnip>& codeSnips,
+                        const QVector<CodeSnip> & codeSnips,
                         TypeSystem::CodeSnipPosition position,
                         TypeSystem::Language language,
                         const AbstractMetaClass* context = 0);
     /// Write user's custom code snippets at function level.
     void writeCodeSnips(QTextStream& s,
-                        const QList<CodeSnip>& codeSnips,
+                        const QVector<CodeSnip> & codeSnips,
                         TypeSystem::CodeSnipPosition position,
                         TypeSystem::Language language,
                         const AbstractMetaFunction* func,
                         const AbstractMetaArgument* lastArg = 0);
 
     /// Returns a string with the user's custom code snippets that comply with \p position and \p language.
-    QString getCodeSnippets(const QList<CodeSnip>& codeSnips, TypeSystem::CodeSnipPosition position, TypeSystem::Language language);
+    QString getCodeSnippets(const QVector<CodeSnip> & codeSnips, TypeSystem::CodeSnipPosition position, TypeSystem::Language language);
 
     /// Replaces variables for the user's custom code at global or class level.
     void processCodeSnip(QString& code, const AbstractMetaClass* context = 0);
@@ -412,7 +414,7 @@ public:
     QString extendedIsConvertibleFunctionName(const TypeEntry* targetType) const;
     QString extendedToCppFunctionName(const TypeEntry* targetType) const;
 
-    QMap< QString, QString > options() const;
+    QMap< QString, QString > options() const override;
 
     /// Returns true if the user enabled the so called "parent constructor heuristic".
     bool useCtorHeuristic() const;
@@ -497,12 +499,12 @@ protected:
 
     // All data about extended converters: the type entries of the target type, and a
     // list of AbstractMetaClasses accepted as argument for the conversion.
-    typedef QHash<const TypeEntry*, QList<const AbstractMetaClass*> > ExtendedConverterData;
+    typedef QHash<const TypeEntry *, QVector<const AbstractMetaClass *> > ExtendedConverterData;
     /// Returns all extended conversions for the current module.
     ExtendedConverterData getExtendedConverters() const;
 
     /// Returns a list of converters for the non wrapper types of the current module.
-    QList<const CustomConversion*> getPrimitiveCustomConversions();
+    QVector<const CustomConversion *> getPrimitiveCustomConversions();
 
     /// Returns true if the Python wrapper for the received OverloadData must accept a list of arguments.
     static bool pythonFunctionWrapperUsesListOfArguments(const OverloadData& overloadData);
@@ -531,7 +533,7 @@ private:
 
     /// Type system converter variable replacement names and regular expressions.
     QString m_typeSystemConvName[TypeSystemConverterVariables];
-    QRegExp m_typeSystemConvRegEx[TypeSystemConverterVariables];
+    QRegularExpression m_typeSystemConvRegEx[TypeSystemConverterVariables];
 };
 
 #endif // SHIBOKENGENERATOR_H

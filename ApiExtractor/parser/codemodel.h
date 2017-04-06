@@ -35,7 +35,6 @@
 #include "codemodel_enums.h"
 
 #include <QtCore/QHash>
-#include <QtCore/QList>
 #include <QtCore/QSet>
 #include <QtCore/QString>
 #include <QtCore/QStringList>
@@ -158,21 +157,18 @@ public:
         m_arrayElements = arrayElements;
     }
 
-    QList<TypeInfo> arguments() const
-    {
-        return m_arguments;
-    }
+    QVector<TypeInfo> arguments() const { return m_arguments; }
 
-    void setArguments(const QList<TypeInfo> &arguments);
+    void setArguments(const QVector<TypeInfo> &arguments);
 
     void addArgument(const TypeInfo &arg)
     {
         m_arguments.append(arg);
     }
 
-    bool operator==(const TypeInfo &other);
+    bool operator==(const TypeInfo &other) const;
 
-    bool operator!=(const TypeInfo &other)
+    bool operator!=(const TypeInfo &other) const
     {
         return !(*this == other);
     }
@@ -193,7 +189,7 @@ private:
 
     QStringList m_qualifiedName;
     QStringList m_arrayElements;
-    QList<TypeInfo> m_arguments;
+    QVector<TypeInfo> m_arguments;
 
     union {
         uint flags;
@@ -320,7 +316,7 @@ public:
     FunctionModelItem declaredFunction(FunctionModelItem item);
 
 #ifndef QT_NO_DEBUG_STREAM
-    void formatDebug(QDebug &d) const Q_DECL_OVERRIDE;
+    void formatDebug(QDebug &d) const override;
 #endif
 
 protected:
@@ -372,7 +368,7 @@ public:
     QStringList propertyDeclarations() const { return m_propertyDeclarations; }
 
 #ifndef QT_NO_DEBUG_STREAM
-    void formatDebug(QDebug &d) const Q_DECL_OVERRIDE;
+    void formatDebug(QDebug &d) const override;
 #endif
 
 private:
@@ -395,14 +391,14 @@ public:
     ~_NamespaceModelItem();
 
     NamespaceList namespaces() const { return m_namespaces; }
-    QSet<NamespaceModelItem> uniqueNamespaces() const { return m_namespaces.toSet(); }
+    QSet<NamespaceModelItem> uniqueNamespaces() const;
 
     void addNamespace(NamespaceModelItem item);
 
     NamespaceModelItem findNamespace(const QString &name) const;
 
 #ifndef QT_NO_DEBUG_STREAM
-    void formatDebug(QDebug &d) const Q_DECL_OVERRIDE;
+    void formatDebug(QDebug &d) const override;
 #endif
 
 private:
@@ -442,7 +438,7 @@ public:
     void setDefaultValueExpression(const QString &expr) { m_defaultValueExpression = expr; }
 
 #ifndef QT_NO_DEBUG_STREAM
-    void formatDebug(QDebug &d) const Q_DECL_OVERRIDE;
+    void formatDebug(QDebug &d) const override;
 #endif
 
 private:
@@ -496,7 +492,7 @@ public:
     void setType(const TypeInfo &type);
 
 #ifndef QT_NO_DEBUG_STREAM
-    void formatDebug(QDebug &d) const Q_DECL_OVERRIDE;
+    void formatDebug(QDebug &d) const override;
 #endif
 
 private:
@@ -558,7 +554,7 @@ public:
     bool isSimilar(FunctionModelItem other) const;
 
 #ifndef QT_NO_DEBUG_STREAM
-    void formatDebug(QDebug &d) const Q_DECL_OVERRIDE;
+    void formatDebug(QDebug &d) const override;
 #endif
 
 private:
@@ -602,7 +598,7 @@ public:
     void setType(const TypeInfo &type);
 
 #ifndef QT_NO_DEBUG_STREAM
-    void formatDebug(QDebug &d) const Q_DECL_OVERRIDE;
+    void formatDebug(QDebug &d) const override;
 #endif
 
 private:
@@ -629,7 +625,7 @@ public:
     void setAnonymous(bool anonymous);
 
 #ifndef QT_NO_DEBUG_STREAM
-    void formatDebug(QDebug &d) const Q_DECL_OVERRIDE;
+    void formatDebug(QDebug &d) const override;
 #endif
 
 private:
@@ -653,7 +649,7 @@ public:
     void setValue(const QString &value);
 
 #ifndef QT_NO_DEBUG_STREAM
-    void formatDebug(QDebug &d) const Q_DECL_OVERRIDE;
+    void formatDebug(QDebug &d) const override;
 #endif
 
 private:
@@ -678,7 +674,7 @@ public:
     void setDefaultValue(bool defaultValue);
 
 #ifndef QT_NO_DEBUG_STREAM
-    void formatDebug(QDebug &d) const Q_DECL_OVERRIDE;
+    void formatDebug(QDebug &d) const override;
 #endif
 
 private:

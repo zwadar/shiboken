@@ -1,7 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2016 The Qt Company Ltd.
-** Copyright (C) 2002-2005 Roberto Raggi <roberto@kdevelop.org>
+** Copyright (C) 2017 The Qt Company Ltd.
 ** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of PySide2.
@@ -27,51 +26,24 @@
 **
 ****************************************************************************/
 
+#ifndef TYPEDATABASE_TYPEDEFS_H
+#define TYPEDATABASE_TYPEDEFS_H
 
-#ifndef CLASS_COMPILER_H
-#define CLASS_COMPILER_H
+#include <QtCore/QHash>
+#include <QtCore/QString>
+#include <QtCore/QVector>
 
-#include <QtCore/qglobal.h>
-#include <QtCore/QStringList>
+class ContainerTypeEntry;
+class PrimitiveTypeEntry;
+class TemplateEntry;
+class TypeEntry;
 
-#include <default_visitor.h>
-#include <name_compiler.h>
-#include <type_compiler.h>
+typedef QVector<TypeEntry *> TypeEntryList;
+typedef QHash<QString, TypeEntryList> TypeEntryHash;
+typedef QHash<QString, TypeEntry *> SingleTypeEntryHash;
+typedef QHash<QString, TemplateEntry *> TemplateEntryHash;
 
-class TokenStream;
-class Binder;
+typedef QVector<const ContainerTypeEntry *> ContainerTypeEntryList;
+typedef QVector<const PrimitiveTypeEntry *> PrimitiveTypeEntryList;
 
-class ClassCompiler: protected DefaultVisitor
-{
-public:
-    ClassCompiler(Binder *binder);
-    virtual ~ClassCompiler();
-
-    inline QString name() const
-    {
-        return _M_name;
-    }
-
-    inline QStringList baseClasses() const
-    {
-        return _M_base_classes;
-    }
-
-    void run(ClassSpecifierAST *node);
-
-protected:
-    virtual void visitClassSpecifier(ClassSpecifierAST *node);
-    virtual void visitBaseSpecifier(BaseSpecifierAST *node);
-
-private:
-    Binder *_M_binder;
-    TokenStream *_M_token_stream;
-    QString _M_name;
-    QStringList _M_base_classes;
-    NameCompiler name_cc;
-    TypeCompiler type_cc;
-};
-
-#endif // CLASS_COMPILER_H
-
-// kate: space-indent on; indent-width 2; replace-tabs on;
+#endif // TYPEDATABASE_TYPEDEFS_H

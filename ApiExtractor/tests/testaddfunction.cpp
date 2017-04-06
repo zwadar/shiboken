@@ -49,7 +49,7 @@ void TestAddFunction::testParsingFuncNameAndConstness()
     const char sig2[] = "    _fu__nc_       (  type1, const type2, const Abc<int& , C<char*> *   >  * *, const type3* const    )   const ";
     AddedFunction f2(QLatin1String(sig2), QLatin1String("const Abc<int& , C<char*> *   >  * *"), 0);
     QCOMPARE(f2.name(), QLatin1String("_fu__nc_"));
-    QList< AddedFunction::TypeInfo > args = f2.arguments();
+    QVector< AddedFunction::TypeInfo > args = f2.arguments();
     QCOMPARE(args.count(), 4);
     retval = f2.returnType();
     QCOMPARE(retval.name, QLatin1String("Abc<int& , C<char*> *   >"));
@@ -423,8 +423,8 @@ void TestAddFunction::testAddFunctionOnTypedef()
     AbstractMetaClass* foo = AbstractMetaClass::findClass(classes, QLatin1String("FooInt"));
     QVERIFY(foo);
     QVERIFY(foo->hasNonPrivateConstructor());
-    AbstractMetaFunctionList lst = foo->queryFunctions(AbstractMetaClass::Constructors);
-    foreach(AbstractMetaFunction* f, lst)
+    const AbstractMetaFunctionList &lst = foo->queryFunctions(AbstractMetaClass::Constructors);
+    for (const AbstractMetaFunction *f : lst)
         QVERIFY(f->signature().startsWith(f->name()));
     QCOMPARE(lst.size(), 2);
     const AbstractMetaFunction* method = foo->findFunction(QLatin1String("method"));

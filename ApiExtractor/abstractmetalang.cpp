@@ -26,8 +26,6 @@
 **
 ****************************************************************************/
 
-#include <QStack>
-
 #include "abstractmetalang.h"
 #include "reporthandler.h"
 #include "typedatabase.h"
@@ -37,6 +35,9 @@
 #  include <QtCore/QMetaEnum>
 #  include <QtCore/QMetaObject>
 #endif
+
+#include <QtCore/QRegularExpression>
+#include <QtCore/QStack>
 
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug d, const AbstractMetaAttributes *aa)
@@ -279,7 +280,7 @@ void AbstractMetaType::decideUsagePattern()
 bool AbstractMetaType::hasTemplateChildren() const
 {
     QStack<AbstractMetaType *> children;
-    children << m_children.toVector();
+    children << m_children;
 
     // Recursively iterate over the children / descendants of the type, to check if any of them
     // corresponds to a template argument type.
@@ -287,7 +288,7 @@ bool AbstractMetaType::hasTemplateChildren() const
         AbstractMetaType *child = children.pop();
         if (child->typeEntry()->isTemplateArgument())
             return true;
-        children << child->m_children.toVector();
+        children << child->m_children;
     }
 
     return false;
@@ -347,8 +348,8 @@ AbstractMetaFunction::~AbstractMetaFunction()
  */
 bool AbstractMetaFunction::isModifiedRemoved(int types) const
 {
-    FunctionModificationList mods = modifications(implementingClass());
-    foreach (const FunctionModification &mod, mods) {
+    const FunctionModificationList &mods = modifications(implementingClass());
+    for (const FunctionModification &mod : mods) {
         if (!mod.isRemoveModifier())
             continue;
 
@@ -368,7 +369,7 @@ bool AbstractMetaFunction::needsCallThrough() const
     if (argumentsHaveNativeId() || !isStatic())
         return true;
 
-    foreach (const AbstractMetaArgument *arg, arguments()) {
+    for (const AbstractMetaArgument *arg : m_arguments) {
         if (arg->type()->isArray() || arg->type()->isTargetLangEnum() || arg->type()->isTargetLangFlags())
             return true;
     }
@@ -388,8 +389,8 @@ bool AbstractMetaFunction::needsCallThrough() const
 bool AbstractMetaFunction::needsSuppressUncheckedWarning() const
 {
     for (int i = -1; i <= arguments().size(); ++i) {
-        QList<ReferenceCount> referenceCounts = this->referenceCounts(implementingClass(), i);
-        foreach (const ReferenceCount &referenceCount, referenceCounts) {
+        const QVector<ReferenceCount> &referenceCounts = this->referenceCounts(implementingClass(), i);
+        for (const ReferenceCount &referenceCount : referenceCounts) {
             if (referenceCount.action != ReferenceCount::Set)
                 return true;
         }
@@ -400,8 +401,7 @@ bool AbstractMetaFunction::needsSuppressUncheckedWarning() const
 QString AbstractMetaFunction::marshalledName() const
 {
     QString returned = QLatin1String("__qt_") + name();
-    AbstractMetaArgumentList arguments = this->arguments();
-    foreach (const AbstractMetaArgument *arg, arguments) {
+    for (const AbstractMetaArgument *arg : m_arguments) {
         returned += QLatin1Char('_');
         if (arg->type()->isNativePointer()) {
             returned += QLatin1String("nativepointer");
@@ -510,7 +510,7 @@ AbstractMetaFunction *AbstractMetaFunction::copy() const
     cpy->setConstant(isConstant());
     cpy->setOriginalAttributes(originalAttributes());
 
-    foreach (AbstractMetaArgument *arg, arguments())
+    for (AbstractMetaArgument *arg : m_arguments)
     cpy->addArgument(arg->copy());
 
     Q_ASSERT((!type() && !cpy->type())
@@ -525,7 +525,7 @@ bool AbstractMetaFunction::usesRValueReferences() const
         return true;
     if (m_type && m_type->referenceType() == RValueReference)
         return true;
-    foreach (const AbstractMetaArgument *a, m_arguments) {
+    for (const AbstractMetaArgument *a : m_arguments) {
         if (a->type()->referenceType() == RValueReference)
             return true;
     }
@@ -600,13 +600,13 @@ int AbstractMetaFunction::actualMinimumArgumentCount() const
 }
 
 // Returns reference counts for argument at idx, or all arguments if idx == -2
-QList<ReferenceCount> AbstractMetaFunction::referenceCounts(const AbstractMetaClass *cls, int idx) const
+QVector<ReferenceCount> AbstractMetaFunction::referenceCounts(const AbstractMetaClass *cls, int idx) const
 {
-    QList<ReferenceCount> returned;
+    QVector<ReferenceCount> returned;
 
-    FunctionModificationList mods = this->modifications(cls);
-    foreach (const FunctionModification &mod, mods) {
-        foreach (const ArgumentModification &argumentMod, mod.argument_mods) {
+    const FunctionModificationList &mods = this->modifications(cls);
+    for (const FunctionModification &mod : mods) {
+        for (const ArgumentModification &argumentMod : mod.argument_mods) {
             if (argumentMod.index != idx && idx != -2)
                 continue;
             returned += argumentMod.referenceCounts;
@@ -619,9 +619,9 @@ QList<ReferenceCount> AbstractMetaFunction::referenceCounts(const AbstractMetaCl
 
 ArgumentOwner AbstractMetaFunction::argumentOwner(const AbstractMetaClass *cls, int idx) const
 {
-    FunctionModificationList mods = this->modifications(cls);
-    foreach (const FunctionModification &mod, mods) {
-        foreach (const ArgumentModification &argumentMod, mod.argument_mods) {
+    const FunctionModificationList &mods = this->modifications(cls);
+    for (const FunctionModification &mod : mods) {
+        for (const ArgumentModification &argumentMod : mod.argument_mods) {
             if (argumentMod.index != idx)
                 continue;
             return argumentMod.owner;
@@ -633,9 +633,9 @@ ArgumentOwner AbstractMetaFunction::argumentOwner(const AbstractMetaClass *cls, 
 
 QString AbstractMetaFunction::replacedDefaultExpression(const AbstractMetaClass *cls, int key) const
 {
-    FunctionModificationList modifications = this->modifications(cls);
-    foreach (const FunctionModification &modification, modifications) {
-        foreach (const ArgumentModification &argumentModification, modification.argument_mods) {
+    const FunctionModificationList &modifications = this->modifications(cls);
+    for (const FunctionModification &modification : modifications) {
+        for (const ArgumentModification &argumentModification : modification.argument_mods) {
             if (argumentModification.index == key
                 && !argumentModification.replacedDefaultExpression.isEmpty()) {
                 return argumentModification.replacedDefaultExpression;
@@ -648,9 +648,9 @@ QString AbstractMetaFunction::replacedDefaultExpression(const AbstractMetaClass 
 
 bool AbstractMetaFunction::removedDefaultExpression(const AbstractMetaClass *cls, int key) const
 {
-    FunctionModificationList modifications = this->modifications(cls);
-    foreach (const FunctionModification &modification, modifications) {
-        foreach (const ArgumentModification &argumentModification, modification.argument_mods) {
+    const FunctionModificationList &modifications = this->modifications(cls);
+    for (const FunctionModification &modification : modifications) {
+        for (const ArgumentModification &argumentModification : modification.argument_mods) {
             if (argumentModification.index == key
                 && argumentModification.removedDefaultExpression) {
                 return true;
@@ -664,9 +664,9 @@ bool AbstractMetaFunction::removedDefaultExpression(const AbstractMetaClass *cls
 bool AbstractMetaFunction::resetObjectAfterUse(int argumentIdx) const
 {
     const AbstractMetaClass *cls = declaringClass();
-    FunctionModificationList modifications = this->modifications(cls);
-    foreach (const FunctionModification &modification, modifications) {
-        foreach (const ArgumentModification &argumentModification, modification.argument_mods) {
+    const FunctionModificationList &modifications = this->modifications(cls);
+    for (const FunctionModification &modification : modifications) {
+        for (const ArgumentModification &argumentModification : modification.argument_mods) {
             if (argumentModification.index == argumentIdx && argumentModification.resetAfterUse)
                 return true;
         }
@@ -684,9 +684,9 @@ QString AbstractMetaFunction::nullPointerDefaultValue(const AbstractMetaClass *m
         cls = implementingClass();
 
     do {
-        FunctionModificationList modifications = this->modifications(cls);
-        foreach (const FunctionModification &modification, modifications) {
-            foreach (const ArgumentModification &argumentModification, modification.argument_mods) {
+        const FunctionModificationList &modifications = this->modifications(cls);
+        for (const FunctionModification &modification : modifications) {
+            for (const ArgumentModification &argumentModification : modification.argument_mods) {
                 if (argumentModification.index == argumentIdx
                     && argumentModification.noNullPointers) {
                     return argumentModification.nullPointerDefaultValue;
@@ -707,9 +707,9 @@ bool AbstractMetaFunction::nullPointersDisabled(const AbstractMetaClass *mainCla
         cls = implementingClass();
 
     do {
-        FunctionModificationList modifications = this->modifications(cls);
-        foreach (const FunctionModification &modification, modifications) {
-            foreach (const ArgumentModification &argumentModification, modification.argument_mods) {
+        const FunctionModificationList &modifications = this->modifications(cls);
+        for (const FunctionModification &modification : modifications) {
+            for (const ArgumentModification &argumentModification : modification.argument_mods) {
                 if (argumentModification.index == argumentIdx
                     && argumentModification.noNullPointers) {
                     return true;
@@ -725,13 +725,13 @@ bool AbstractMetaFunction::nullPointersDisabled(const AbstractMetaClass *mainCla
 
 QString AbstractMetaFunction::conversionRule(TypeSystem::Language language, int key) const
 {
-    FunctionModificationList modifications = this->modifications(declaringClass());
-    foreach (const FunctionModification &modification, modifications) {
-        foreach (const ArgumentModification &argumentModification, modification.argument_mods) {
+    const FunctionModificationList &modifications = this->modifications(declaringClass());
+    for (const FunctionModification &modification : modifications) {
+        for (const ArgumentModification &argumentModification : modification.argument_mods) {
             if (argumentModification.index != key)
                 continue;
 
-            foreach (const CodeSnip &snip, argumentModification.conversion_rules) {
+            for (const CodeSnip &snip : argumentModification.conversion_rules) {
                 if (snip.language == language && !snip.code().isEmpty())
                     return snip.code();
             }
@@ -743,9 +743,9 @@ QString AbstractMetaFunction::conversionRule(TypeSystem::Language language, int 
 
 QString AbstractMetaFunction::argumentReplaced(int key) const
 {
-    FunctionModificationList modifications = this->modifications(declaringClass());
-    foreach (const FunctionModification &modification, modifications) {
-        foreach (const ArgumentModification &argumentModification, modification.argument_mods) {
+    const FunctionModificationList &modifications = this->modifications(declaringClass());
+    for (const FunctionModification &modification : modifications) {
+        for (const ArgumentModification &argumentModification : modification.argument_mods) {
             if (argumentModification.index == key && !argumentModification.replace_value.isEmpty())
                 return argumentModification.replace_value;
         }
@@ -757,9 +757,9 @@ QString AbstractMetaFunction::argumentReplaced(int key) const
 // FIXME If we remove a arg. in the method at the base class, it will not reflect here.
 bool AbstractMetaFunction::argumentRemoved(int key) const
 {
-    FunctionModificationList modifications = this->modifications(declaringClass());
-    foreach (const FunctionModification &modification, modifications) {
-        foreach (const ArgumentModification &argumentModification, modification.argument_mods) {
+    const FunctionModificationList &modifications = this->modifications(declaringClass());
+    for (const FunctionModification &modification : modifications) {
+        for (const ArgumentModification &argumentModification : modification.argument_mods) {
             if (argumentModification.index == key) {
                 if (argumentModification.removed)
                     return true;
@@ -772,8 +772,8 @@ bool AbstractMetaFunction::argumentRemoved(int key) const
 
 bool AbstractMetaFunction::isVirtualSlot() const
 {
-    FunctionModificationList modifications = this->modifications(declaringClass());
-    foreach (const FunctionModification &modification, modifications) {
+    const FunctionModificationList &modifications = this->modifications(declaringClass());
+    for (const FunctionModification &modification : modifications) {
         if (modification.isVirtualSlot())
             return true;
     }
@@ -785,9 +785,9 @@ bool AbstractMetaFunction::disabledGarbageCollection(const AbstractMetaClass *cl
 {
     typedef QHash<TypeSystem::Language, TypeSystem::Ownership>::const_iterator OwnershipMapIt;
 
-    FunctionModificationList modifications = this->modifications(cls);
-    foreach (const FunctionModification &modification, modifications) {
-        foreach (const ArgumentModification &argumentModification, modification.argument_mods) {
+    const FunctionModificationList &modifications = this->modifications(cls);
+    for (const FunctionModification &modification : modifications) {
+        for (const ArgumentModification &argumentModification : modification.argument_mods) {
             if (argumentModification.index != key)
                 continue;
 
@@ -804,8 +804,8 @@ bool AbstractMetaFunction::disabledGarbageCollection(const AbstractMetaClass *cl
 
 bool AbstractMetaFunction::isDeprecated() const
 {
-    FunctionModificationList modifications = this->modifications(declaringClass());
-    foreach (const FunctionModification &modification, modifications) {
+    const FunctionModificationList &modifications = this->modifications(declaringClass());
+    for (const FunctionModification &modification : modifications) {
         if (modification.isDeprecated())
             return true;
     }
@@ -814,8 +814,8 @@ bool AbstractMetaFunction::isDeprecated() const
 
 bool AbstractMetaFunction::isThread() const
 {
-    FunctionModificationList modifications = this->modifications(declaringClass());
-    foreach (const FunctionModification &modification, modifications) {
+    const FunctionModificationList &modifications = this->modifications(declaringClass());
+    for (const FunctionModification &modification : modifications) {
         if (modification.isThread())
             return true;
     }
@@ -824,8 +824,8 @@ bool AbstractMetaFunction::isThread() const
 
 bool AbstractMetaFunction::allowThread() const
 {
-    FunctionModificationList modifications = this->modifications(declaringClass());
-    foreach (const FunctionModification &modification, modifications) {
+    const FunctionModificationList &modifications = this->modifications(declaringClass());
+    for (const FunctionModification &modification : modifications) {
         if (modification.allowThread())
             return true;
     }
@@ -835,9 +835,9 @@ bool AbstractMetaFunction::allowThread() const
 
 TypeSystem::Ownership AbstractMetaFunction::ownership(const AbstractMetaClass *cls, TypeSystem::Language language, int key) const
 {
-    FunctionModificationList modifications = this->modifications(cls);
-    foreach (const FunctionModification &modification, modifications) {
-        foreach (const ArgumentModification &argumentModification, modification.argument_mods) {
+    const FunctionModificationList &modifications = this->modifications(cls);
+    for (const FunctionModification &modification : modifications) {
+        for (const ArgumentModification &argumentModification : modification.argument_mods) {
             if (argumentModification.index == key)
                 return argumentModification.ownerships.value(language, TypeSystem::InvalidOwnership);
         }
@@ -853,8 +853,8 @@ bool AbstractMetaFunction::isRemovedFromAllLanguages(const AbstractMetaClass *cl
 
 bool AbstractMetaFunction::isRemovedFrom(const AbstractMetaClass *cls, TypeSystem::Language language) const
 {
-    FunctionModificationList modifications = this->modifications(cls);
-    foreach (const FunctionModification &modification, modifications) {
+    const FunctionModificationList &modifications = this->modifications(cls);
+    for (const FunctionModification &modification : modifications) {
         if ((modification.removal & language) == language)
             return true;
     }
@@ -865,9 +865,9 @@ bool AbstractMetaFunction::isRemovedFrom(const AbstractMetaClass *cls, TypeSyste
 
 QString AbstractMetaFunction::typeReplaced(int key) const
 {
-    FunctionModificationList modifications = this->modifications(declaringClass());
-    foreach (const FunctionModification &modification, modifications) {
-        foreach (const ArgumentModification &argumentModification, modification.argument_mods) {
+    const FunctionModificationList &modifications = this->modifications(declaringClass());
+    for (const FunctionModification &modification : modifications) {
+        for (const ArgumentModification &argumentModification : modification.argument_mods) {
             if (argumentModification.index == key
                 && !argumentModification.modified_type.isEmpty()) {
                 return argumentModification.modified_type;
@@ -923,9 +923,9 @@ FunctionModificationList AbstractMetaFunction::modifications(const AbstractMetaC
         if ((implementor == implementor->baseClass()) ||
             (implementor == implementingClass() && (mods.size() > 0)))
                 break;
-        foreach (const AbstractMetaClass* interface, implementor->interfaces()) {
+        const AbstractMetaClassList &interfaces = implementor->interfaces();
+        for (const AbstractMetaClass *interface : interfaces)
             mods += this->modifications(interface);
-        }
         implementor = implementor->baseClass();
     }
     return mods;
@@ -950,7 +950,8 @@ bool AbstractMetaFunction::isCallOperator() const
 
 bool AbstractMetaFunction::hasInjectedCode() const
 {
-    foreach (const FunctionModification &mod, modifications(ownerClass())) {
+    const FunctionModificationList &mods = modifications(ownerClass());
+    for (const FunctionModification &mod : mods) {
         if (mod.isCodeInjection())
             return true;
     }
@@ -960,12 +961,12 @@ bool AbstractMetaFunction::hasInjectedCode() const
 CodeSnipList AbstractMetaFunction::injectedCodeSnips(TypeSystem::CodeSnipPosition position, TypeSystem::Language language) const
 {
     CodeSnipList result;
-    foreach (const FunctionModification &mod, modifications(ownerClass())) {
+    const FunctionModificationList &mods = modifications(ownerClass());
+    for (const FunctionModification &mod : mods) {
         if (mod.isCodeInjection()) {
-            QList<CodeSnip>::const_iterator it = mod.snips.constBegin();
-            for (;it != mod.snips.constEnd(); ++it) {
-                if ((it->language & language) && (it->position == position || position == TypeSystem::CodeSnipPositionAny))
-                    result << *it;
+            for (const CodeSnip &snip : mod.snips) {
+                if ((snip.language & language) && (snip.position == position || position == TypeSystem::CodeSnipPositionAny))
+                    result << snip;
             }
         }
     }
@@ -974,10 +975,11 @@ CodeSnipList AbstractMetaFunction::injectedCodeSnips(TypeSystem::CodeSnipPositio
 
 bool AbstractMetaFunction::hasSignatureModifications() const
 {
-    foreach (const FunctionModification &mod, modifications()) {
+    const FunctionModificationList &mods = modifications();
+    for (const FunctionModification &mod : mods) {
         if (mod.isRenameModifier())
             return true;
-        foreach (const ArgumentModification &argmod, mod.argument_mods) {
+        for (const ArgumentModification &argmod : mod.argument_mods) {
             // since zero represents the return type and we're
             // interested only in checking the function arguments,
             // it will be ignored.
@@ -990,8 +992,9 @@ bool AbstractMetaFunction::hasSignatureModifications() const
 
 bool AbstractMetaFunction::isConversionOperator(QString funcName)
 {
-    static QRegExp opRegEx(QLatin1String("^operator(?:\\s+(?:const|volatile))?\\s+(\\w+\\s*)&?$"));
-    return opRegEx.indexIn(funcName) > -1;
+    static const QRegularExpression opRegEx(QStringLiteral("^operator(?:\\s+(?:const|volatile))?\\s+(\\w+\\s*)&?$"));
+    Q_ASSERT(opRegEx.isValid());
+    return opRegEx.match(funcName).hasMatch();
 }
 
 bool AbstractMetaFunction::isOperatorOverload(QString funcName)
@@ -999,12 +1002,13 @@ bool AbstractMetaFunction::isOperatorOverload(QString funcName)
     if (isConversionOperator(funcName))
         return true;
 
-    static QRegExp opRegEx(QLatin1String("^operator([+\\-\\*/%=&\\|\\^\\<>!][=]?"
+    static const QRegularExpression opRegEx(QLatin1String("^operator([+\\-\\*/%=&\\|\\^\\<>!][=]?"
                     "|\\+\\+|\\-\\-|&&|\\|\\||<<[=]?|>>[=]?|~"
                     "|\\[\\]|\\s+delete\\[?\\]?"
                     "|\\(\\)"
                     "|\\s+new\\[?\\]?)$"));
-    return opRegEx.indexIn(funcName) > -1;
+    Q_ASSERT(opRegEx.isValid());
+    return opRegEx.match(funcName).hasMatch();
 }
 
 bool AbstractMetaFunction::isCastOperator() const
@@ -1133,8 +1137,8 @@ bool AbstractMetaFunction::isVirtual() const
 QString AbstractMetaFunction::modifiedName() const
 {
     if (m_cachedModifiedName.isEmpty()) {
-        FunctionModificationList mods = modifications(implementingClass());
-        foreach (const FunctionModification &mod, mods) {
+        const FunctionModificationList &mods = modifications(implementingClass());
+        for (const FunctionModification &mod : mods) {
             if (mod.isRenameModifier()) {
                 m_cachedModifiedName = mod.renamedToName;
                 break;
@@ -1261,10 +1265,8 @@ AbstractMetaClass::~AbstractMetaClass()
     qDeleteAll(m_functions);
     qDeleteAll(m_fields);
     qDeleteAll(m_enums);
-    if (hasTemplateBaseClassInstantiations()) {
-        foreach (AbstractMetaType* inst, templateBaseClassInstantiations())
-            delete inst;
-    }
+    if (hasTemplateBaseClassInstantiations())
+        qDeleteAll(templateBaseClassInstantiations());
 }
 
 /*******************************************************************************
@@ -1300,7 +1302,7 @@ AbstractMetaClass *AbstractMetaClass::extractInterface()
 
         iface->setTypeEntry(typeEntry()->designatedInterface());
 
-        foreach (AbstractMetaFunction *function, functions()) {
+        for (AbstractMetaFunction *function : qAsConst(m_functions)) {
             if (!function->isConstructor())
                 iface->addFunction(function->copy());
         }
@@ -1308,7 +1310,7 @@ AbstractMetaClass *AbstractMetaClass::extractInterface()
 //         iface->setEnums(enums());
 //         setEnums(AbstractMetaEnumList());
 
-        foreach (const AbstractMetaField *field, fields()) {
+        for (const AbstractMetaField *field : qAsConst(m_fields)) {
             if (field->isPublic()) {
                 AbstractMetaField *new_field = field->copy();
                 new_field->setEnclosingClass(iface);
@@ -1329,8 +1331,7 @@ AbstractMetaClass *AbstractMetaClass::extractInterface()
 AbstractMetaFunctionList AbstractMetaClass::queryFunctionsByName(const QString &name) const
 {
     AbstractMetaFunctionList returned;
-    AbstractMetaFunctionList functions = this->functions();
-    foreach (AbstractMetaFunction *function, functions) {
+    for (AbstractMetaFunction *function : m_functions) {
         if (function->name() == name)
             returned.append(function);
     }
@@ -1376,10 +1377,10 @@ AbstractMetaFunctionList AbstractMetaClass::functionsInTargetLang() const
 
 AbstractMetaFunctionList AbstractMetaClass::virtualFunctions() const
 {
-    AbstractMetaFunctionList list = functionsInShellClass();
+    const AbstractMetaFunctionList &list = functionsInShellClass();
 
     AbstractMetaFunctionList returned;
-    foreach (AbstractMetaFunction *f, list) {
+    for (AbstractMetaFunction *f : list) {
         if (!f->isFinalInCpp() || f->isVirtualSlot())
             returned += f;
     }
@@ -1393,14 +1394,12 @@ AbstractMetaFunctionList AbstractMetaClass::implicitConversions() const
         return AbstractMetaFunctionList();
 
     AbstractMetaFunctionList returned;
-    AbstractMetaFunctionList list = queryFunctions(Constructors);
-
-    list.append(externalConversionOperators());
+    const AbstractMetaFunctionList list = queryFunctions(Constructors) + externalConversionOperators();
 
     // Exclude anything that uses rvalue references, be it a move
     // constructor "QPolygon(QPolygon &&)" or something else like
     // "QPolygon(QVector<QPoint> &&)".
-    foreach (AbstractMetaFunction *f, list) {
+    for (AbstractMetaFunction *f : list) {
         if ((f->actualMinimumArgumentCount() == 1 || f->arguments().size() == 1 || f->isConversionOperator())
             && !f->isExplicit()
             && f->functionType() != AbstractMetaFunction::CopyConstructorFunction
@@ -1415,9 +1414,9 @@ AbstractMetaFunctionList AbstractMetaClass::implicitConversions() const
 
 AbstractMetaFunctionList AbstractMetaClass::operatorOverloads(OperatorQueryOptions query) const
 {
-    AbstractMetaFunctionList list = queryFunctions(OperatorOverloads | Visible);
+    const AbstractMetaFunctionList &list = queryFunctions(OperatorOverloads | Visible);
     AbstractMetaFunctionList returned;
-    foreach (AbstractMetaFunction *f, list) {
+    for (AbstractMetaFunction *f : list) {
         if (((query & ArithmeticOp) && f->isArithmeticOperator())
             || ((query & BitwiseOp) && f->isBitwiseOperator())
             || ((query & ComparisonOp) && f->isComparisonOperator())
@@ -1434,7 +1433,7 @@ AbstractMetaFunctionList AbstractMetaClass::operatorOverloads(OperatorQueryOptio
 
 bool AbstractMetaClass::hasOperatorOverload() const
 {
-    foreach (const AbstractMetaFunction *f, m_functions) {
+    for (const AbstractMetaFunction *f : m_functions) {
         if (f->ownerClass() == f->implementingClass() && f->isOperatorOverload() && !f->isPrivate())
             return true;
     }
@@ -1443,7 +1442,7 @@ bool AbstractMetaClass::hasOperatorOverload() const
 
 bool AbstractMetaClass::hasArithmeticOperatorOverload() const
 {
-    foreach (const AbstractMetaFunction *f, m_functions) {
+    for (const AbstractMetaFunction *f : m_functions) {
         if (f->ownerClass() == f->implementingClass() && f->isArithmeticOperator() && !f->isPrivate())
             return true;
     }
@@ -1452,7 +1451,7 @@ bool AbstractMetaClass::hasArithmeticOperatorOverload() const
 
 bool AbstractMetaClass::hasBitwiseOperatorOverload() const
 {
-    foreach (const AbstractMetaFunction *f, m_functions) {
+    for (const AbstractMetaFunction *f : m_functions) {
         if (f->ownerClass() == f->implementingClass() && f->isBitwiseOperator() && !f->isPrivate())
             return true;
     }
@@ -1461,7 +1460,7 @@ bool AbstractMetaClass::hasBitwiseOperatorOverload() const
 
 bool AbstractMetaClass::hasComparisonOperatorOverload() const
 {
-    foreach (const AbstractMetaFunction *f, m_functions) {
+    for (const AbstractMetaFunction *f : m_functions) {
         if (f->ownerClass() == f->implementingClass() && f->isComparisonOperator() && !f->isPrivate())
             return true;
     }
@@ -1470,7 +1469,7 @@ bool AbstractMetaClass::hasComparisonOperatorOverload() const
 
 bool AbstractMetaClass::hasLogicalOperatorOverload() const
 {
-    foreach (const AbstractMetaFunction *f, m_functions) {
+    for (const AbstractMetaFunction *f : m_functions) {
         if (f->ownerClass() == f->implementingClass() && f->isLogicalOperator() && !f->isPrivate())
             return true;
     }
@@ -1479,7 +1478,7 @@ bool AbstractMetaClass::hasLogicalOperatorOverload() const
 
 bool AbstractMetaClass::hasSubscriptOperatorOverload() const
 {
-    foreach (const AbstractMetaFunction *f, m_functions) {
+    for (const AbstractMetaFunction *f : m_functions) {
         if (f->ownerClass() == f->implementingClass() && f->isSubscriptOperator() && !f->isPrivate())
             return true;
     }
@@ -1488,7 +1487,7 @@ bool AbstractMetaClass::hasSubscriptOperatorOverload() const
 
 bool AbstractMetaClass::hasAssignmentOperatorOverload() const
 {
-    foreach (const AbstractMetaFunction *f, m_functions) {
+    for (const AbstractMetaFunction *f : m_functions) {
         if (f->ownerClass() == f->implementingClass() && f->isAssignmentOperator() && !f->isPrivate())
             return true;
     }
@@ -1497,7 +1496,7 @@ bool AbstractMetaClass::hasAssignmentOperatorOverload() const
 
 bool AbstractMetaClass::hasConversionOperatorOverload() const
 {
-    foreach (const AbstractMetaFunction *f, m_functions) {
+    for (const AbstractMetaFunction *f : m_functions) {
         if (f->ownerClass() == f->implementingClass() && f->isConversionOperator() && !f->isPrivate())
             return true;
     }
@@ -1558,7 +1557,7 @@ void AbstractMetaClass::setFunctions(const AbstractMetaFunctionList &functions)
     QString currentName;
     bool hasVirtuals = false;
     AbstractMetaFunctionList finalFunctions;
-    foreach (AbstractMetaFunction *f, m_functions) {
+    for (AbstractMetaFunction *f : qAsConst(m_functions)) {
         f->setOwnerClass(this);
 
         m_hasVirtualSlots = m_hasVirtualSlots || f->isVirtualSlot();
@@ -1574,7 +1573,7 @@ void AbstractMetaClass::setFunctions(const AbstractMetaFunctionList &functions)
                 finalFunctions += f;
         } else {
             if (hasVirtuals && finalFunctions.size() > 0) {
-                foreach (AbstractMetaFunction *final_function, finalFunctions) {
+                for (AbstractMetaFunction *final_function : qAsConst(finalFunctions)) {
                     *final_function += AbstractMetaAttributes::ForceShellImplementation;
 
                     qCWarning(lcShiboken).noquote().nospace()
@@ -1594,7 +1593,7 @@ void AbstractMetaClass::setFunctions(const AbstractMetaFunctionList &functions)
 
 bool AbstractMetaClass::hasFieldAccessors() const
 {
-    foreach (const AbstractMetaField *field, fields()) {
+    for (const AbstractMetaField *field : m_fields) {
         if (field->getter() || field->setter())
             return true;
     }
@@ -1604,7 +1603,8 @@ bool AbstractMetaClass::hasFieldAccessors() const
 
 bool AbstractMetaClass::hasDefaultToStringFunction() const
 {
-    foreach (AbstractMetaFunction *f, queryFunctionsByName(QLatin1String("toString"))) {
+    const AbstractMetaFunctionList &funcs = queryFunctionsByName(QLatin1String("toString"));
+    for (const AbstractMetaFunction *f : funcs) {
         if (!f->actualMinimumArgumentCount())
             return true;
     }
@@ -1632,7 +1632,7 @@ bool AbstractMetaClass::hasSignal(const AbstractMetaFunction *other) const
     if (!other->isSignal())
         return false;
 
-    foreach (const AbstractMetaFunction *f, functions()) {
+    for (const AbstractMetaFunction *f : m_functions) {
         if (f->isSignal() && f->compareTo(other) & AbstractMetaFunction::EqualName)
             return other->modifiedName() == f->modifiedName();
     }
@@ -1685,7 +1685,7 @@ bool AbstractMetaClass::hasFunction(const QString &str) const
 
 const AbstractMetaFunction* AbstractMetaClass::findFunction(const QString& functionName) const
 {
-    foreach (const AbstractMetaFunction *f, functions()) {
+    for (const AbstractMetaFunction *f : m_functions) {
         if (f->name() == functionName)
             return f;
     }
@@ -1694,7 +1694,7 @@ const AbstractMetaFunction* AbstractMetaClass::findFunction(const QString& funct
 
 bool AbstractMetaClass::hasProtectedFunctions() const
 {
-    foreach (AbstractMetaFunction *func, m_functions) {
+    for (AbstractMetaFunction *func : m_functions) {
         if (func->isProtected())
             return true;
     }
@@ -1703,7 +1703,7 @@ bool AbstractMetaClass::hasProtectedFunctions() const
 
 bool AbstractMetaClass::hasProtectedFields() const
 {
-    foreach (const AbstractMetaField *field, fields()) {
+    for (const AbstractMetaField *field : m_fields) {
         if (field->isProtected())
             return true;
     }
@@ -1775,7 +1775,7 @@ void AbstractMetaClass::setTemplateBaseClassInstantiations(AbstractMetaTypeList&
 
 static bool functions_contains(const AbstractMetaFunctionList &l, const AbstractMetaFunction *func)
 {
-    foreach (const AbstractMetaFunction *f, l) {
+    for (const AbstractMetaFunction *f : l) {
         if ((f->compareTo(func) & AbstractMetaFunction::PrettySimilar) == AbstractMetaFunction::PrettySimilar)
             return true;
     }
@@ -1809,8 +1809,8 @@ AbstractMetaField *AbstractMetaField::copy() const
  */
 bool AbstractMetaField::isModifiedRemoved(int types) const
 {
-    FieldModificationList mods = modifications();
-    foreach (const FieldModification &mod, mods) {
+    const FieldModificationList &mods = modifications();
+    for (const FieldModification &mod : mods) {
         if (!mod.isRemoveModifier())
             continue;
 
@@ -1854,8 +1854,8 @@ static AbstractMetaFunction *createXetter(const AbstractMetaField *g, const QStr
     f->setAttributes(attr);
     f->setOriginalAttributes(attr);
 
-    FieldModificationList mods = g->modifications();
-    foreach (const FieldModification &mod, mods) {
+    const FieldModificationList &mods = g->modifications();
+    for (const FieldModification &mod : mods) {
         if (mod.isRenameModifier())
             f->setName(mod.renamedTo());
         if (mod.isAccessModifier()) {
@@ -1874,10 +1874,10 @@ static AbstractMetaFunction *createXetter(const AbstractMetaField *g, const QStr
 
 FieldModificationList AbstractMetaField::modifications() const
 {
-    FieldModificationList mods = enclosingClass()->typeEntry()->fieldModifications();
+    const FieldModificationList &mods = enclosingClass()->typeEntry()->fieldModifications();
     FieldModificationList returned;
 
-    foreach (const FieldModification &mod, mods) {
+    for (const FieldModification &mod : mods) {
         if (mod.name == name())
             returned += mod;
     }
@@ -1994,7 +1994,8 @@ bool AbstractMetaClass::hasConstructors() const
 
 bool AbstractMetaClass::hasCopyConstructor() const
 {
-    foreach (const AbstractMetaFunction* ctor, queryFunctions(Constructors)) {
+    const AbstractMetaFunctionList &ctors = queryFunctions(Constructors);
+    for (const AbstractMetaFunction* ctor : ctors) {
         if (ctor->functionType() == AbstractMetaFunction::CopyConstructorFunction)
             return true;
     }
@@ -2003,7 +2004,8 @@ bool AbstractMetaClass::hasCopyConstructor() const
 
 bool AbstractMetaClass::hasPrivateCopyConstructor() const
 {
-    foreach (const AbstractMetaFunction* ctor, queryFunctions(Constructors)) {
+    const AbstractMetaFunctionList &ctors = queryFunctions(Constructors);
+    for (const AbstractMetaFunction *ctor : ctors) {
         if (ctor->functionType() == AbstractMetaFunction::CopyConstructorFunction && ctor->isPrivate())
             return true;
     }
@@ -2077,7 +2079,7 @@ AbstractMetaFunctionList AbstractMetaClass::queryFunctions(FunctionQueryOptions 
 {
     AbstractMetaFunctionList functions;
 
-    foreach (AbstractMetaFunction *f, m_functions) {
+    for (AbstractMetaFunction *f : m_functions) {
 
         if ((query & VirtualSlots) && !f->isVirtualSlot())
             continue;
@@ -2199,8 +2201,10 @@ void AbstractMetaClass::addInterface(AbstractMetaClass *interface)
     if (m_extractedInterface && m_extractedInterface != interface)
         m_extractedInterface->addInterface(interface);
 
+
 #if 0
-    foreach (AbstractMetaFunction *function, interface->functions())
+    const AbstractMetaFunctionList &funcs = interface->functions();
+    for (AbstractMetaFunction *function : funcs)
     if (!hasFunction(function) && !function->isConstructor()) {
         AbstractMetaFunction *cpy = function->copy();
         cpy->setImplementingClass(this);
@@ -2210,8 +2214,8 @@ void AbstractMetaClass::addInterface(AbstractMetaClass *interface)
         *cpy += AbstractMetaAttributes::InterfaceFunction;
 
         // Copy the modifications in interface into the implementing classes.
-        FunctionModificationList mods = function->modifications(interface);
-        foreach (const FunctionModification &mod, mods)
+        const FunctionModificationList &mods = function->modifications(interface);
+        for (const FunctionModification &mod : mods)
             m_typeEntry->addFunctionModification(mod);
 
         // It should be mostly safe to assume that when we implement an interface
@@ -2228,7 +2232,7 @@ void AbstractMetaClass::addInterface(AbstractMetaClass *interface)
 void AbstractMetaClass::setInterfaces(const AbstractMetaClassList &interfaces)
 {
     m_interfaces = interfaces;
-    foreach (const AbstractMetaClass* interface, interfaces) {
+    for (const AbstractMetaClass *interface : interfaces) {
         if (interface)
             m_isPolymorphic |= interface->isPolymorphic();
     }
@@ -2237,7 +2241,7 @@ void AbstractMetaClass::setInterfaces(const AbstractMetaClassList &interfaces)
 
 AbstractMetaEnum *AbstractMetaClass::findEnum(const QString &enumName)
 {
-    foreach (AbstractMetaEnum *e, m_enums) {
+    for (AbstractMetaEnum *e : qAsConst(m_enums)) {
         if (e->name() == enumName)
             return e;
     }
@@ -2257,10 +2261,11 @@ AbstractMetaEnum *AbstractMetaClass::findEnum(const QString &enumName)
 */
 AbstractMetaEnumValue *AbstractMetaClass::findEnumValue(const QString &enumValueName, AbstractMetaEnum *meta_enum)
 {
-    foreach (AbstractMetaEnum *e, m_enums) {
+    for (AbstractMetaEnum *e : qAsConst(m_enums)) {
         if (e != meta_enum)
             continue;
-        foreach (AbstractMetaEnumValue *v, e->values()) {
+        const AbstractMetaEnumValueList &values = e->values();
+        for (AbstractMetaEnumValue *v : values) {
             if (v->name() == enumValueName)
                 return v;
         }
@@ -2284,8 +2289,9 @@ AbstractMetaEnumValue *AbstractMetaClass::findEnumValue(const QString &enumValue
  */
 AbstractMetaEnum *AbstractMetaClass::findEnumForValue(const QString &enumValueName)
 {
-    foreach (AbstractMetaEnum *e, m_enums) {
-        foreach (AbstractMetaEnumValue *v, e->values()) {
+    for (AbstractMetaEnum *e : qAsConst(m_enums)) {
+        const AbstractMetaEnumValueList &values = e->values();
+        for (AbstractMetaEnumValue *v : values) {
             if (v->name() == enumValueName)
                 return e;
         }
@@ -2316,8 +2322,8 @@ static void addExtraIncludeForType(AbstractMetaClass *metaClass, const AbstractM
     }
 
     if (type->hasInstantiations()) {
-        AbstractMetaTypeList instantiations = type->instantiations();
-        foreach (const AbstractMetaType *instantiation, instantiations)
+        const AbstractMetaTypeList &instantiations = type->instantiations();
+        for (const AbstractMetaType *instantiation : instantiations)
             addExtraIncludeForType(metaClass, instantiation);
     }
 }
@@ -2328,9 +2334,9 @@ static void addExtraIncludesForFunction(AbstractMetaClass *metaClass, const Abst
     Q_ASSERT(meta_function);
     addExtraIncludeForType(metaClass, meta_function->type());
 
-    AbstractMetaArgumentList arguments = meta_function->arguments();
-    foreach (AbstractMetaArgument *argument, arguments)
-    addExtraIncludeForType(metaClass, argument->type());
+    const AbstractMetaArgumentList &arguments = meta_function->arguments();
+    for (AbstractMetaArgument *argument : arguments)
+        addExtraIncludeForType(metaClass, argument->type());
 }
 
 void AbstractMetaClass::fixFunctions()
@@ -2448,8 +2454,8 @@ void AbstractMetaClass::fixFunctions()
 
                                 bool hasNonFinalModifier = false;
                                 bool isBaseImplPrivate = false;
-                                FunctionModificationList mods = sf->modifications(sf->implementingClass());
-                                foreach (const FunctionModification &mod, mods) {
+                                const FunctionModificationList &mods = sf->modifications(sf->implementingClass());
+                                for (const FunctionModification &mod : mods) {
                                     if (mod.isNonFinal()) {
                                         hasNonFinalModifier = true;
                                         break;
@@ -2495,7 +2501,7 @@ void AbstractMetaClass::fixFunctions()
                 funcsToAdd << sf;
         }
 
-        foreach (AbstractMetaFunction *f, funcsToAdd)
+        for (AbstractMetaFunction *f : qAsConst(funcsToAdd))
             funcs << f->copy();
 
         if (superClass)
@@ -2506,9 +2512,9 @@ void AbstractMetaClass::fixFunctions()
 
     bool hasPrivateConstructors = false;
     bool hasPublicConstructors = false;
-    foreach (AbstractMetaFunction *func, funcs) {
-        FunctionModificationList mods = func->modifications(this);
-        foreach (const FunctionModification &mod, mods) {
+    for (AbstractMetaFunction *func : qAsConst(funcs)) {
+        const FunctionModificationList &mods = func->modifications(this);
+        for (const FunctionModification &mod : mods) {
             if (mod.isRenameModifier()) {
                 func->setName(mod.renamedTo());
             }
@@ -2540,8 +2546,8 @@ void AbstractMetaClass::fixFunctions()
         (*this) -= AbstractMetaAttributes::Final;
     }
 
-    foreach (AbstractMetaFunction *f1, funcs) {
-        foreach (AbstractMetaFunction *f2, funcs) {
+    for (AbstractMetaFunction *f1 : qAsConst(funcs)) {
+        for (AbstractMetaFunction *f2 : qAsConst(funcs)) {
             if (f1 != f2) {
                 const AbstractMetaFunction::CompareResult cmp = f1->compareTo(f2);
                 if ((cmp & AbstractMetaFunction::EqualName)
@@ -2664,8 +2670,9 @@ AbstractMetaEnumValue *AbstractMetaClass::findEnumValue(const AbstractMetaClassL
             return cl->findEnumValue(enumName, 0);
     }
 
-    foreach (AbstractMetaClass* metaClass, classes) {
-        foreach(AbstractMetaEnum* metaEnum, metaClass->enums()) {
+    for (AbstractMetaClass *metaClass : classes) {
+        const AbstractMetaEnumList &enums = metaClass->enums();
+        for (AbstractMetaEnum *metaEnum : enums) {
             AbstractMetaEnumValue* enumValue = metaClass->findEnumValue(name, metaEnum);
             if (enumValue)
                 return enumValue;
@@ -2688,17 +2695,17 @@ AbstractMetaClass *AbstractMetaClass::findClass(const AbstractMetaClassList &cla
     if (name.isEmpty())
         return 0;
 
-    foreach (AbstractMetaClass *c, classes) {
+    for (AbstractMetaClass *c : classes) {
         if (c->qualifiedCppName() == name)
             return c;
     }
 
-    foreach (AbstractMetaClass *c, classes) {
+    for (AbstractMetaClass *c : classes) {
         if (c->fullName() == name)
             return c;
     }
 
-    foreach (AbstractMetaClass *c, classes) {
+    for (AbstractMetaClass *c : classes) {
         if (c->name() == name)
             return c;
     }
@@ -2709,7 +2716,7 @@ AbstractMetaClass *AbstractMetaClass::findClass(const AbstractMetaClassList &cla
 AbstractMetaClass *AbstractMetaClass::findClass(const AbstractMetaClassList &classes,
                                                 const TypeEntry* typeEntry)
 {
-    foreach (AbstractMetaClass* c, classes) {
+    for (AbstractMetaClass* c : classes) {
         if (c->typeEntry() == typeEntry)
             return c;
     }

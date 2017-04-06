@@ -1,7 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2016 The Qt Company Ltd.
-** Copyright (C) 2002-2005 Roberto Raggi <roberto@kdevelop.org>
+** Copyright (C) 2017 The Qt Company Ltd.
 ** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of PySide2.
@@ -27,7 +26,15 @@
 **
 ****************************************************************************/
 
+#ifndef COMPILERSUPPORT_H
+#define COMPILERSUPPORT_H
 
-#include "list.h"
+#include <QtCore/QByteArrayList>
 
-// kate: space-indent on; indent-width 2; replace-tabs on;
+namespace clang {
+
+QByteArrayList emulatedCompilerOptions();
+
+} // namespace clang
+
+#endif // COMPILERSUPPORT_H
